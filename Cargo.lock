@@ -1102,6 +1102,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-openai",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

@@ -1,4 +1,3 @@
-
 use anyhow::anyhow;
 use anyhow::{Error, Result};
 use async_openai::{config::OpenAIConfig, types::{ChatCompletionRequestMessageContentPartTextArgs, ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, CreateChatCompletionResponse}};

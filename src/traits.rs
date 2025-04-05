@@ -1,6 +1,8 @@
 use anyhow::{anyhow, Error, Result};
 use async_openai::{config::Config, types::{ChatCompletionRequestMessage, ChatCompletionRequestMessageContentPartTextArgs, ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, CreateChatCompletionResponse, ResponseFormat}, Client};
 
+use crate::prompt::Prompt;
+
 pub trait IsLLM {
     /// Provides access to the client instance.
     fn access_client(&self) -> &Client<impl Config>;
@@ -22,7 +24,7 @@ where
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_json(&self, prompt: String) -> Result<String, Error> {
+    fn generate_json(&self, prompt: &Prompt) -> Result<String, Error> {
         let runtime = tokio::runtime::Runtime::new()?;
         let result = runtime.block_on(
             async {
@@ -32,7 +34,7 @@ where
                     .messages(vec![ChatCompletionRequestUserMessageArgs::default()
                         .content(vec![
                             ChatCompletionRequestMessageContentPartTextArgs::default()
-                                .text(prompt)
+                                .text(prompt.to_string())
                                 .build()?
                                 .into(),
                         ])
@@ -63,12 +65,12 @@ where
     ///
     /// # Arguments
     ///
-    /// * `context` - A vector of `ChatCompletionRequestMessage` that holds the context to be sent to the LLM.
+    /// * `context` - A collection of `ChatCompletionRequestMessage` instances that provide the context to be sent to the LLM.
     ///
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_json_with_context(&self, context: Vec<ChatCompletionRequestMessage>) -> Result<String, Error> {
+    fn generate_json_with_context(&self, context: impl Into<Vec<ChatCompletionRequestMessage>>) -> Result<String, Error> {
         let runtime = tokio::runtime::Runtime::new()?;
         let result = runtime.block_on(
             async {
