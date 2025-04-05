@@ -1,0 +1,11 @@
+[package]
+name = "secretary"
+version = "0.1.0"
+edition = "2024"
+description = "Translate natural languages into structural data"
+authors =  ["Xinyu Bao <baoxinyuworks@163.com>"]
+readme = "README.md"
+repository = "https://github.com/aspadax/secretary"
+license = "MIT"
+
+[dependencies]
