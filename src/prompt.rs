@@ -33,7 +33,7 @@ impl Prompt {
     ///
     /// let example = Example {
     ///     name: "A school name".to_string(),
-    ///     kind: "mid-school, high-school, or elemenatry school".to_string(),
+    ///     kind: "mid-school, high-school, or elementary school".to_string(),
     /// };
     ///
     /// let prompt = Prompt::new(example, ["Categorize the text".to_string(), "John School is mid-school".to_string()]);
