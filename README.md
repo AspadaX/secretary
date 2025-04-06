@@ -1,2 +1,2 @@
 # secretary
-Translate natural languages into structural data
+Translate natural languages into structural data. 
