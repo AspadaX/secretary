@@ -1,19 +1,18 @@
-use anyhow::anyhow;
 use anyhow::{Error, Result};
-use async_openai::{config::OpenAIConfig, types::{ChatCompletionRequestMessageContentPartTextArgs, ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs, CreateChatCompletionResponse}};
+use async_openai::config::OpenAIConfig;
 use async_openai::Client;
 
 use crate::traits::{GenerateJSON, IsLLM};
 
-/// Represents a Large Language Model (LLM).
+/// Represents a Large Language Model (LLM) that is compatible with OpenAI API. 
 /// An LLM is the primary tool we use to convert unstructured data into structured data.
 #[derive(Debug)]
-pub struct LLM {
+pub struct OpenAILLM {
     model: String,
     client: Client<OpenAIConfig>
 }
 
-impl LLM {
+impl OpenAILLM {
     /// Creates a new instance of the LLM struct.
     ///
     /// # Arguments
@@ -35,45 +34,9 @@ impl LLM {
 
         Ok(Self { model: model.to_string(), client})
     }
-
-    pub fn generate(&self, prompt: String) -> Result<String, Error> {
-        let runtime = tokio::runtime::Runtime::new()?;
-        let result = runtime.block_on(
-            async {
-                let request = CreateChatCompletionRequestArgs::default()
-                    .model(&self.model)
-                    .messages(vec![ChatCompletionRequestUserMessageArgs::default()
-                        .content(vec![
-                            ChatCompletionRequestMessageContentPartTextArgs::default()
-                                .text(prompt)
-                                .build()?
-                                .into(),
-                        ])
-                        .build()?
-                        .into()])
-                    .build()?;
-
-                let response: CreateChatCompletionResponse =
-                    match self.client.chat().create(request.clone()).await {
-                        std::result::Result::Ok(response) => response,
-                        Err(e) => {
-                            anyhow::bail!("Failed to execute function: {}", e);
-                        }
-                    };
-                
-                if let Some(content) = response.choices[0].clone().message.content {
-                    return Ok(content);
-                }
-
-                return Err(anyhow!("No response is retrieved from the LLM"));
-            }
-        )?;
-
-        Ok(result)
-    }
 }
 
-impl IsLLM for LLM {
+impl IsLLM for OpenAILLM {
     fn access_client(&self) -> &Client<impl async_openai::config::Config> {
         &self.client
     }
@@ -83,4 +46,4 @@ impl IsLLM for LLM {
     }
 }
 
-impl GenerateJSON for LLM {}
+impl GenerateJSON for OpenAILLM {}

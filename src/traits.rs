@@ -98,4 +98,41 @@ where
 
         Ok(result)
     }
+    
+    /// Generate a pure string
+    fn generate(&self, prompt: &Prompt) -> Result<String, Error> {
+        let runtime = tokio::runtime::Runtime::new()?;
+        let result = runtime.block_on(
+            async {
+                let request = CreateChatCompletionRequestArgs::default()
+                    .model(&self.access_model().to_string())
+                    .messages(vec![ChatCompletionRequestUserMessageArgs::default()
+                        .content(vec![
+                            ChatCompletionRequestMessageContentPartTextArgs::default()
+                                .text(prompt.to_string())
+                                .build()?
+                                .into(),
+                        ])
+                        .build()?
+                        .into()])
+                    .build()?;
+
+                let response: CreateChatCompletionResponse =
+                    match self.access_client().chat().create(request.clone()).await {
+                        std::result::Result::Ok(response) => response,
+                        Err(e) => {
+                            anyhow::bail!("Failed to execute function: {}", e);
+                        }
+                    };
+                
+                if let Some(content) = response.choices[0].clone().message.content {
+                    return Ok(content);
+                }
+
+                return Err(anyhow!("No response is retrieved from the LLM"));
+            }
+        )?;
+
+        Ok(result)
+    }
 }
