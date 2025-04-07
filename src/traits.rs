@@ -20,13 +20,14 @@ where
     /// # Arguments
     ///
     /// * `prompt` - A string slice that holds the prompt to be sent to the LLM.
+    /// * `target` - A string slice that holds the data to be sent to the LLM to generate a json.
     ///
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_json(&self, prompt: &Prompt) -> Result<String, Error> {
+    fn generate_json(&self, prompt: &Prompt, target: &str) -> Result<String, Error> {
         let runtime = tokio::runtime::Runtime::new()?;
-        let result = runtime.block_on(
+        let result: String = runtime.block_on(
             async {
                 let request = CreateChatCompletionRequestArgs::default()
                     .model(&self.access_model().to_string())
@@ -34,7 +35,7 @@ where
                     .messages(vec![ChatCompletionRequestUserMessageArgs::default()
                         .content(vec![
                             ChatCompletionRequestMessageContentPartTextArgs::default()
-                                .text(prompt.to_string())
+                                .text(prompt.to_string() + "\nThis is the basis for generating a json:\n" + target)
                                 .build()?
                                 .into(),
                         ])
