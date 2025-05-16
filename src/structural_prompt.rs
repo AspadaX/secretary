@@ -4,40 +4,17 @@ use anyhow::{anyhow, Error};
 use async_openai::types::{ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestFunctionMessageArgs, ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestToolMessageArgs, ChatCompletionRequestUserMessageArgs, Role};
 use serde::{Deserialize, Serialize};
 
+use crate::traits::Context;
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Prompt {
+pub struct StructuralPrompt {
     data_structure: HashMap<String, String>,
     additional_instructions: Vec<String>,
     context: Vec<ChatCompletionRequestMessage>,
 }
 
-impl Prompt {
-    /// Creates a new `Prompt` instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `data_structure_with_annotations` - A data structure that can be serialized and deserialized.
-    /// * `additional_instructions` - A string containing additional instructions.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use std::collections::HashMap;
-    /// use serde::{Deserialize, Serialize};
-    /// 
-    /// #[derive(Deserialize, Serialize)]
-    /// struct School {
-    ///     name: String,
-    ///     kind: String,
-    /// }
-    ///
-    /// let example = Example {
-    ///     name: "A school name".to_string(),
-    ///     kind: "mid-school, high-school, or elementary school".to_string(),
-    /// };
-    ///
-    /// let prompt = Prompt::new(example, ["Categorize the text".to_string(), "John School is mid-school".to_string()]);
-    /// ```
+impl StructuralPrompt {
+    /// TODO: docs and examples
     pub fn new<'de, T>(data_structure_with_annotations: T, additional_instructions: Vec<String>) -> Self
     where
         T: Deserialize<'de> + Serialize,
@@ -49,41 +26,15 @@ impl Prompt {
             context: vec![]
         }
     }
-    
-    /// Update the context
-    pub fn push(&mut self, role: Role, content: &str) -> Result<(), Error> {
-        match role {
-            Role::User => {
-                self.context.push(
-                    ChatCompletionRequestUserMessageArgs::default()
-                        .content(content)
-                        .build()
-                        .unwrap()
-                        .into()
-                )
-            },
-            Role::Assistant => {
-                self.context.push(
-                    ChatCompletionRequestAssistantMessageArgs::default()
-                        .content(content)
-                        .build()
-                        .unwrap()
-                        .into()
-                );
-            },
-            _ => return Err(anyhow!("Unsupported role"))
-        }
-        
-        Ok(())
-    }
-    
-    /// Get access right to read and write the context
-    pub fn get_context_mut(&mut self) -> &mut Vec<ChatCompletionRequestMessage> {
+}
+
+impl Context for StructuralPrompt {
+    fn get_context_mut(&mut self) -> &mut Vec<ChatCompletionRequestMessage> {
         &mut self.context
     }
 }
 
-impl Display for Prompt {
+impl Display for StructuralPrompt {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut prompt = String::new();
         prompt.push_str("This is the json structure that you should strictly follow:\n");
@@ -100,7 +51,7 @@ impl Display for Prompt {
     }
 }
 
-impl Into<Vec<ChatCompletionRequestMessage>> for Prompt {
+impl Into<Vec<ChatCompletionRequestMessage>> for StructuralPrompt {
     fn into(self) -> Vec<ChatCompletionRequestMessage> {
         let mut final_context: Vec<ChatCompletionRequestMessage> = Vec::new();
         final_context.push(

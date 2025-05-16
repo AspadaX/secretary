@@ -3,12 +3,46 @@ use async_openai::{config::Config, types::{ChatCompletionRequestMessage, ChatCom
 
 use crate::prompt::Prompt;
 
+/// Implement this for various LLM API standards
 pub trait IsLLM {
     /// Provides access to the client instance.
     fn access_client(&self) -> &Client<impl Config>;
 
     /// Provides access to the model identifier.
     fn access_model(&self) -> &str;
+}
+
+/// Implement this for context management
+pub trait Context {
+    /// Update the context
+    fn push(&mut self, role: Role, content: &str) -> Result<(), Error> {
+        match role {
+            Role::User => {
+                self.get_context_mut().push(
+                    ChatCompletionRequestUserMessageArgs::default()
+                        .content(content)
+                        .build()
+                        .unwrap()
+                        .into()
+                )
+            },
+            Role::Assistant => {
+                self.get_context_mut().push(
+                    ChatCompletionRequestAssistantMessageArgs::default()
+                        .content(content)
+                        .build()
+                        .unwrap()
+                        .into()
+                );
+            },
+            _ => return Err(anyhow!("Unsupported role"))
+        }
+        
+        Ok(())
+    }
+    
+    /// Get access right to read and write the context
+    fn get_context_mut(&mut self) -> &mut Vec<ChatCompletionRequestMessage>;
 }
 
 pub trait GenerateJSON
@@ -99,40 +133,66 @@ where
 
         Ok(result)
     }
-    
-    /// Generate a pure string
-    fn generate(&self, prompt: &Prompt) -> Result<String, Error> {
-        let runtime = tokio::runtime::Runtime::new()?;
-        let result = runtime.block_on(
-            async {
-                let request = CreateChatCompletionRequestArgs::default()
-                    .model(&self.access_model().to_string())
-                    .messages(vec![ChatCompletionRequestUserMessageArgs::default()
-                        .content(vec![
-                            ChatCompletionRequestMessageContentPartTextArgs::default()
-                                .text(prompt.to_string())
-                                .build()?
-                                .into(),
-                        ])
+}
+
+pub trait AsyncGenerateJSON
+where 
+    Self: IsLLM
+{
+    // TODO: Docs and Examples
+    async fn async_generate_json(&self, prompt: &Prompt, target: &str) -> Result<String, Error> {
+        let request = CreateChatCompletionRequestArgs::default()
+            .model(&self.access_model().to_string())
+            .response_format(ResponseFormat::JsonObject)
+            .messages(vec![ChatCompletionRequestUserMessageArgs::default()
+                .content(vec![
+                    ChatCompletionRequestMessageContentPartTextArgs::default()
+                        .text(prompt.to_string() + "\nThis is the basis for generating a json:\n" + target)
                         .build()?
-                        .into()])
-                    .build()?;
+                        .into(),
+                ])
+                .build()?
+                .into()])
+            .build()?;
 
-                let response: CreateChatCompletionResponse =
-                    match self.access_client().chat().create(request.clone()).await {
-                        std::result::Result::Ok(response) => response,
-                        Err(e) => {
-                            anyhow::bail!("Failed to execute function: {}", e);
-                        }
-                    };
-                
-                if let Some(content) = response.choices[0].clone().message.content {
-                    return Ok(content);
+        let response: CreateChatCompletionResponse =
+            match self.access_client().chat().create(request.clone()).await {
+                std::result::Result::Ok(response) => response,
+                Err(e) => {
+                    anyhow::bail!("Failed to execute function: {}", e);
                 }
+            };
 
-                return Err(anyhow!("No response is retrieved from the LLM"));
-            }
-        )?;
+        if let Some(content) = response.choices[0].clone().message.content {
+            return Ok(content);
+        }
+
+        return Err(anyhow!("No response is retrieved from the LLM"));
+
+        Ok(result)
+    }
+
+    // TODO: Docs and Examples
+    async fn async_generate_json_with_context(&self, context: impl Into<Vec<ChatCompletionRequestMessage>>) -> Result<String, Error> {
+        let request = CreateChatCompletionRequestArgs::default()
+            .model(&self.access_model().to_string())
+            .response_format(ResponseFormat::JsonObject)
+            .messages(context)
+            .build()?;
+
+        let response: CreateChatCompletionResponse =
+            match self.access_client().chat().create(request.clone()).await {
+                std::result::Result::Ok(response) => response,
+                Err(e) => {
+                    anyhow::bail!("Failed to execute function: {}", e);
+                }
+            };
+
+        if let Some(content) = response.choices[0].clone().message.content {
+            return Ok(content);
+        }
+
+        return Err(anyhow!("No response is retrieved from the LLM"));
 
         Ok(result)
     }

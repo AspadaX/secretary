@@ -1,4 +1,4 @@
-use secretary::{llm::OpenAILLM, prompt::Prompt, traits::GenerateJSON};
+use secretary::{openai::OpenAILLM, prompt::Prompt, traits::GenerateJSON};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
