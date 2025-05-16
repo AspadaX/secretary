@@ -1,15 +1,15 @@
 use anyhow::{Error, Result};
-use async_openai::config::OpenAIConfig;
 use async_openai::Client;
+use async_openai::config::OpenAIConfig;
 
 use crate::traits::{AsyncGenerateJSON, GenerateJSON, IsLLM};
 
-/// Represents a Large Language Model (LLM) that is compatible with OpenAI API. 
+/// Represents a Large Language Model (LLM) that is compatible with OpenAI API.
 /// An LLM is the primary tool we use to convert unstructured data into structured data.
 #[derive(Debug)]
 pub struct OpenAILLM {
     model: String,
-    client: Client<OpenAIConfig>
+    client: Client<OpenAIConfig>,
 }
 
 impl OpenAILLM {
@@ -28,11 +28,12 @@ impl OpenAILLM {
         let llm_configuration: OpenAIConfig = OpenAIConfig::default()
             .with_api_key(api_key)
             .with_api_base(api_base);
-        let client: Client<OpenAIConfig> = async_openai::Client::with_config(
-            llm_configuration
-        );
+        let client: Client<OpenAIConfig> = async_openai::Client::with_config(llm_configuration);
 
-        Ok(Self { model: model.to_string(), client})
+        Ok(Self {
+            model: model.to_string(),
+            client,
+        })
     }
 }
 
@@ -40,7 +41,7 @@ impl IsLLM for OpenAILLM {
     fn access_client(&self) -> &Client<impl async_openai::config::Config> {
         &self.client
     }
-    
+
     fn access_model(&self) -> &str {
         &self.model
     }

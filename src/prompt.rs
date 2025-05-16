@@ -1,7 +1,11 @@
 use std::{collections::HashMap, fmt::Display};
 
-use anyhow::{anyhow, Error};
-use async_openai::types::{ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestFunctionMessageArgs, ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, ChatCompletionRequestToolMessageArgs, ChatCompletionRequestUserMessageArgs, Role};
+use anyhow::{Error, anyhow};
+use async_openai::types::{
+    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestFunctionMessageArgs,
+    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
+    ChatCompletionRequestToolMessageArgs, ChatCompletionRequestUserMessageArgs, Role,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -24,7 +28,7 @@ impl Prompt {
     /// ```
     /// use std::collections::HashMap;
     /// use serde::{Deserialize, Serialize};
-    /// 
+    ///
     /// #[derive(Deserialize, Serialize)]
     /// struct School {
     ///     name: String,
@@ -38,45 +42,48 @@ impl Prompt {
     ///
     /// let prompt = Prompt::new(example, ["Categorize the text".to_string(), "John School is mid-school".to_string()]);
     /// ```
-    pub fn new<'de, T>(data_structure_with_annotations: T, additional_instructions: Vec<String>) -> Self
+    pub fn new<'de, T>(
+        data_structure_with_annotations: T,
+        additional_instructions: Vec<String>,
+    ) -> Self
     where
         T: Deserialize<'de> + Serialize,
     {
-        let data_structure: HashMap<String, String> = serde_json::from_value(serde_json::to_value(data_structure_with_annotations).unwrap()).unwrap();
+        let data_structure: HashMap<String, String> =
+            serde_json::from_value(serde_json::to_value(data_structure_with_annotations).unwrap())
+                .unwrap();
         Self {
             data_structure,
             additional_instructions,
-            context: vec![]
+            context: vec![],
         }
     }
-    
+
     /// Update the context
     pub fn push(&mut self, role: Role, content: &str) -> Result<(), Error> {
         match role {
-            Role::User => {
-                self.context.push(
-                    ChatCompletionRequestUserMessageArgs::default()
-                        .content(content)
-                        .build()
-                        .unwrap()
-                        .into()
-                )
-            },
+            Role::User => self.context.push(
+                ChatCompletionRequestUserMessageArgs::default()
+                    .content(content)
+                    .build()
+                    .unwrap()
+                    .into(),
+            ),
             Role::Assistant => {
                 self.context.push(
                     ChatCompletionRequestAssistantMessageArgs::default()
                         .content(content)
                         .build()
                         .unwrap()
-                        .into()
+                        .into(),
                 );
-            },
-            _ => return Err(anyhow!("Unsupported role"))
+            }
+            _ => return Err(anyhow!("Unsupported role")),
         }
-        
+
         Ok(())
     }
-    
+
     /// Get access right to read and write the context
     pub fn get_context_mut(&mut self) -> &mut Vec<ChatCompletionRequestMessage> {
         &mut self.context
@@ -91,11 +98,9 @@ impl Display for Prompt {
         prompt.push_str("\n");
         prompt.push_str("Besides, you should also following these instructions:\n");
         for additional_instruction in self.additional_instructions.iter() {
-            prompt.push_str(
-                &format!("- {}\n", additional_instruction)
-            );
+            prompt.push_str(&format!("- {}\n", additional_instruction));
         }
-        
+
         write!(f, "Respond in json.\n{}", prompt)
     }
 }
@@ -108,10 +113,10 @@ impl Into<Vec<ChatCompletionRequestMessage>> for Prompt {
                 .content(self.to_string())
                 .build()
                 .unwrap()
-                .into()
+                .into(),
         );
         final_context.extend(self.context.clone());
-        
+
         final_context
     }
 }
