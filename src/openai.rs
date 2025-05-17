@@ -6,7 +6,7 @@ use crate::traits::{AsyncGenerateJSON, GenerateJSON, IsLLM};
 
 /// Represents a Large Language Model (LLM) that is compatible with OpenAI API.
 /// An LLM is the primary tool we use to convert unstructured data into structured data.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct OpenAILLM {
     model: String,
     client: Client<OpenAIConfig>,
