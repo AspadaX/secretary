@@ -155,7 +155,43 @@ pub trait AsyncGenerateJSON
 where
     Self: IsLLM,
 {
-    // TODO: Docs and Examples
+    /// Asynchronously generates JSON response from the LLM based on the provided prompt.
+    ///
+    /// This is the asynchronous version of `generate_json` that can be used in async contexts.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - An implementation of `SystemPrompt` containing schema and instructions.
+    /// * `target` - A string slice that holds the data to be sent to the LLM to generate a json.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::AsyncGenerateJSON};
+    /// use serde::{Deserialize, Serialize};
+    ///
+    /// #[derive(Debug, Serialize, Deserialize)]
+    /// struct MyData {
+    ///     field: String,
+    /// }
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> anyhow::Result<()> {
+    ///     let llm = OpenAILLM::new("api_base", "api_key", "model")?;
+    ///     let task = BasicTask::new(
+    ///         MyData { field: "Description for field".to_string() },
+    ///         vec!["Extract data from the text".to_string()],
+    ///     );
+    ///     
+    ///     let result = llm.async_generate_json(&task, "Some text with info").await?;
+    ///     println!("{}", result);
+    ///     Ok(())
+    /// }
+    /// ```
     async fn async_generate_json(
         &self,
         task: &impl SystemPrompt,
@@ -196,7 +232,53 @@ where
         return Err(anyhow!("No response is retrieved from the LLM"));
     }
 
-    // TODO: Docs and Examples
+    /// Asynchronously generates JSON response from the LLM based on the provided context.
+    ///
+    /// This is the asynchronous version of `generate_json_with_context` that enables
+    /// context-aware conversations in async contexts.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - An implementation of both `SystemPrompt` and `Context` traits that provides
+    ///            both the schema definition and conversation history.
+    ///
+    /// # Returns
+    ///
+    /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use secretary::{
+    ///     message_list::Role,
+    ///     openai::OpenAILLM,
+    ///     tasks::basic_task::BasicTask,
+    ///     traits::{AsyncGenerateJSON, Context},
+    /// };
+    /// use serde::{Deserialize, Serialize};
+    ///
+    /// #[derive(Debug, Serialize, Deserialize)]
+    /// struct MyData {
+    ///     field: String,
+    /// }
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> anyhow::Result<()> {
+    ///     let llm = OpenAILLM::new("api_base", "api_key", "model")?;
+    ///     let mut task = BasicTask::new(
+    ///         MyData { field: "Description for field".to_string() },
+    ///         vec!["Extract data from the text".to_string()],
+    ///     );
+    ///     
+    ///     // Add messages to the conversation context
+    ///     task.push(Role::User, "Here's my first message")?;
+    ///     
+    ///     // Generate response with context
+    ///     let result = llm.async_generate_json_with_context(&task).await?;
+    ///     println!("{}", result);
+    ///     Ok(())
+    /// }
+    /// ```
     async fn async_generate_json_with_context<T>(&self, task: &T) -> Result<String, Error>
     where
         T: SystemPrompt + Context,

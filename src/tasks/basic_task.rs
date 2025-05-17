@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::{Debug, Display}};
+use std::fmt::{Debug, Display};
 
 use async_openai::types::ChatCompletionRequestMessage;
 use serde::{Deserialize, Serialize};
