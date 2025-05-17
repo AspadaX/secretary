@@ -1,6 +1,6 @@
 [package]
 name = "secretary"
-version = "0.1.12"
+version = "0.2.10"
 edition = "2024"
 description = "Translate natural languages into structural data"
 authors =  ["Xinyu Bao <baoxinyuworks@163.com>"]
