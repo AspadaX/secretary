@@ -2,6 +2,7 @@ use std::{collections::HashMap, fmt::{Debug, Display}};
 
 use async_openai::types::ChatCompletionRequestMessage;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     message_list::{Message, MessageList},
@@ -10,7 +11,7 @@ use crate::{
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BasicTask {
-    data_structure: HashMap<String, String>,
+    data_structure: Value,
     additional_instructions: Vec<String>,
     context: MessageList,
 }
@@ -49,9 +50,7 @@ impl BasicTask {
     where
         T: Deserialize<'de> + Serialize + Debug,
     {
-        let data_structure: HashMap<String, String> =
-            serde_json::from_value(serde_json::to_value(data_structure_with_annotations).unwrap())
-                .unwrap();
+        let data_structure: Value = serde_json::to_value(data_structure_with_annotations).unwrap();
         Self {
             data_structure,
             additional_instructions,

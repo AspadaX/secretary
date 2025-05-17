@@ -97,6 +97,22 @@ impl MessageList {
     pub fn push(&mut self, message: Message) {
         self.messages.push(message);
     }
+    
+    pub fn pop(&mut self) -> Option<Message> {
+        self.messages.pop()
+    }
+    
+    pub fn remove(&mut self, index: usize) -> Option<Message> {
+        if index < self.messages.len() {
+            Some(self.messages.remove(index))
+        } else {
+            None
+        }
+    }
+    
+    pub fn iter(&self) -> std::slice::Iter<'_, Message> {
+        self.messages.iter()
+    }
 }
 
 impl IntoIterator for MessageList {
@@ -105,6 +121,24 @@ impl IntoIterator for MessageList {
 
     fn into_iter(self) -> Self::IntoIter {
         self.messages.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a MessageList {
+    type Item = &'a Message;
+    type IntoIter = std::slice::Iter<'a, Message>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.messages.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut MessageList {
+    type Item = &'a mut Message;
+    type IntoIter = std::slice::IterMut<'a, Message>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.messages.iter_mut()
     }
 }
 
