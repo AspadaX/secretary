@@ -88,8 +88,29 @@ pub struct MessageList {
 }
 
 impl MessageList {
+    pub fn new() -> Self {
+        Self {
+            messages: Vec::new(),
+        }
+    }
+
     pub fn push(&mut self, message: Message) {
         self.messages.push(message);
+    }
+}
+
+impl IntoIterator for MessageList {
+    type Item = Message;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.messages.into_iter()
+    }
+}
+
+impl Extend<Message> for MessageList {
+    fn extend<T: IntoIterator<Item = Message>>(&mut self, iter: T) {
+        self.messages.extend(iter);
     }
 }
 

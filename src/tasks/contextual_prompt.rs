@@ -1,14 +1,12 @@
 use std::{collections::HashMap, fmt::Display};
 
-use anyhow::{Error, anyhow};
-use async_openai::types::{
-    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestFunctionMessageArgs,
-    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-    ChatCompletionRequestToolMessageArgs, ChatCompletionRequestUserMessageArgs, Role,
-};
+use async_openai::types::ChatCompletionRequestMessage;
 use serde::{Deserialize, Serialize};
 
-use crate::traits::Context;
+use crate::{
+    message_list::{Message, MessageList},
+    traits::Context,
+};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ContextualPromptStructure {
@@ -21,11 +19,13 @@ pub struct ContextualPromptStructure {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ContextualPrompt {
     contextual_prompt_structure: ContextualPromptStructure,
+    additional_instructions: Vec<String>,
+    context: MessageList,
 }
 
 impl Default for ContextualPromptStructure {
     fn default() -> Self {
-        Self { 
+        Self {
             reasoning: "your thoughts on your response.".to_string(), 
             content: Some("anything that you would like to ask the user. leave it to null if you had collected all the checklist items".to_string()),
             notes: vec!["keypoints that you think are helpful to reach the final conclusion. append only.".to_string()], 
@@ -63,7 +63,10 @@ impl ContextualPrompt {
     ///
     /// let prompt = ContextualPrompt::new(data);
     /// ```
-    pub fn new<'de, T>(data_structure_with_annotations: T) -> Self
+    pub fn new<'de, T>(
+        data_structure_with_annotations: T,
+        additional_instructions: Vec<String>,
+    ) -> Self
     where
         T: Deserialize<'de> + Serialize,
     {
@@ -77,46 +80,54 @@ impl ContextualPrompt {
                 notes: Vec::new(),
                 data_structure,
             },
+            additional_instructions,
+            context: MessageList::new(),
         }
     }
-}
 
-impl Context for ContextualPrompt {
-    fn get_context_mut(&mut self) -> &mut crate::message_list::MessageList {
-        let mut messages = Vec::new();
-        for note in self.contextual_prompt_structure.notes {
-            
-        }
-    }
-}
-
-impl Display for ContextualPrompt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    pub fn get_system_prompt(&self) -> String {
         let mut prompt = String::new();
         prompt.push_str("This is the json structure that you should strictly follow:\n");
-        prompt.push_str(&serde_json::to_string(&self.data_structure).unwrap());
+        prompt.push_str(&serde_json::to_string(&self.contextual_prompt_structure).unwrap());
         prompt.push_str("\n");
         prompt.push_str("Besides, you should also following these instructions:\n");
         for additional_instruction in self.additional_instructions.iter() {
             prompt.push_str(&format!("- {}\n", additional_instruction));
         }
 
-        write!(f, "Respond in json.\n{}", prompt)
+        format!("Respond in json.\n{}", prompt)
+    }
+}
+
+impl Display for ContextualPrompt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            serde_json::to_string(&self.contextual_prompt_structure).unwrap()
+        )
     }
 }
 
 impl Into<Vec<ChatCompletionRequestMessage>> for ContextualPrompt {
     fn into(self) -> Vec<ChatCompletionRequestMessage> {
-        let mut final_context: Vec<ChatCompletionRequestMessage> = Vec::new();
-        final_context.push(
-            ChatCompletionRequestSystemMessageArgs::default()
-                .content(self.to_string())
-                .build()
-                .unwrap()
-                .into(),
-        );
-        final_context.extend(self.context.clone());
+        let mut final_context: MessageList = MessageList::new();
+        final_context.push(Message::new(
+            crate::message_list::Role::System,
+            self.to_string(),
+        ));
+        final_context.extend(self.context);
 
-        final_context
+        final_context.into()
+    }
+}
+
+impl Context for ContextualPrompt {
+    fn get_context_mut(&mut self) -> &mut MessageList {
+        &mut self.context
+    }
+
+    fn get_context(&self) -> MessageList {
+        self.context.clone()
     }
 }

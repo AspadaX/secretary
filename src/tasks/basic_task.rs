@@ -1,21 +1,21 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::{Debug, Display}};
 
-use anyhow::{Error, anyhow};
-use async_openai::types::{
-    ChatCompletionRequestAssistantMessageArgs, ChatCompletionRequestFunctionMessageArgs,
-    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-    ChatCompletionRequestToolMessageArgs, ChatCompletionRequestUserMessageArgs, Role,
-};
+use async_openai::types::ChatCompletionRequestMessage;
 use serde::{Deserialize, Serialize};
 
+use crate::{
+    message_list::{Message, MessageList},
+    traits::{Context, SystemPrompt},
+};
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Prompt {
+pub struct BasicTask {
     data_structure: HashMap<String, String>,
     additional_instructions: Vec<String>,
-    context: Vec<ChatCompletionRequestMessage>,
+    context: MessageList,
 }
 
-impl Prompt {
+impl BasicTask {
     /// Creates a new `Prompt` instance.
     ///
     /// # Arguments
@@ -47,7 +47,7 @@ impl Prompt {
         additional_instructions: Vec<String>,
     ) -> Self
     where
-        T: Deserialize<'de> + Serialize,
+        T: Deserialize<'de> + Serialize + Debug,
     {
         let data_structure: HashMap<String, String> =
             serde_json::from_value(serde_json::to_value(data_structure_with_annotations).unwrap())
@@ -55,43 +55,13 @@ impl Prompt {
         Self {
             data_structure,
             additional_instructions,
-            context: vec![],
+            context: MessageList::new(),
         }
-    }
-
-    /// Update the context
-    pub fn push(&mut self, role: Role, content: &str) -> Result<(), Error> {
-        match role {
-            Role::User => self.context.push(
-                ChatCompletionRequestUserMessageArgs::default()
-                    .content(content)
-                    .build()
-                    .unwrap()
-                    .into(),
-            ),
-            Role::Assistant => {
-                self.context.push(
-                    ChatCompletionRequestAssistantMessageArgs::default()
-                        .content(content)
-                        .build()
-                        .unwrap()
-                        .into(),
-                );
-            }
-            _ => return Err(anyhow!("Unsupported role")),
-        }
-
-        Ok(())
-    }
-
-    /// Get access right to read and write the context
-    pub fn get_context_mut(&mut self) -> &mut Vec<ChatCompletionRequestMessage> {
-        &mut self.context
     }
 }
 
-impl Display for Prompt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl SystemPrompt for BasicTask {
+    fn get_system_prompt(&self) -> String {
         let mut prompt = String::new();
         prompt.push_str("This is the json structure that you should strictly follow:\n");
         prompt.push_str(&serde_json::to_string(&self.data_structure).unwrap());
@@ -101,22 +71,40 @@ impl Display for Prompt {
             prompt.push_str(&format!("- {}\n", additional_instruction));
         }
 
-        write!(f, "Respond in json.\n{}", prompt)
+        prompt
     }
 }
 
-impl Into<Vec<ChatCompletionRequestMessage>> for Prompt {
-    fn into(self) -> Vec<ChatCompletionRequestMessage> {
-        let mut final_context: Vec<ChatCompletionRequestMessage> = Vec::new();
-        final_context.push(
-            ChatCompletionRequestSystemMessageArgs::default()
-                .content(self.to_string())
-                .build()
-                .unwrap()
-                .into(),
-        );
-        final_context.extend(self.context.clone());
+impl Display for BasicTask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            serde_json::to_string(&self.data_structure).unwrap()
+        )
+    }
+}
 
+impl Into<Vec<ChatCompletionRequestMessage>> for BasicTask {
+    fn into(self) -> Vec<ChatCompletionRequestMessage> {
+        self.get_context().into()
+    }
+}
+
+impl Context for BasicTask {
+    fn get_context_mut(&mut self) -> &mut crate::message_list::MessageList {
+        &mut self.context
+    }
+
+    fn get_context(&self) -> MessageList {
+        let mut final_context: MessageList = MessageList::new();
+        final_context.push(Message::new(
+            crate::message_list::Role::System,
+            self.get_system_prompt(),
+        ));
+        
+        final_context.extend(self.context.clone());
+        
         final_context
     }
 }

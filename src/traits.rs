@@ -3,16 +3,14 @@ use async_openai::{
     Client,
     config::Config,
     types::{
-        ChatCompletionRequestMessage, ChatCompletionRequestMessageContentPartTextArgs,
-        ChatCompletionRequestUserMessageArgs, CreateChatCompletionRequestArgs,
-        CreateChatCompletionResponse, ResponseFormat,
+        ChatCompletionRequestMessageContentPartTextArgs, ChatCompletionRequestUserMessageArgs,
+        CreateChatCompletionRequest, CreateChatCompletionRequestArgs, CreateChatCompletionResponse,
+        ResponseFormat,
     },
 };
+use tokio::runtime::Runtime;
 
-use crate::{
-    message_list::{Message, MessageList, Role},
-    prompt::Prompt,
-};
+use crate::message_list::{Message, MessageList, Role};
 
 /// Implement this for various LLM API standards
 pub trait IsLLM {
@@ -23,19 +21,25 @@ pub trait IsLLM {
     fn access_model(&self) -> &str;
 }
 
+/// Represent an object that has a system prompt
+pub trait SystemPrompt {
+    /// Get the system prompt
+    fn get_system_prompt(&self) -> String;
+}
+
 /// Implement this for context management
 pub trait Context {
     /// Update the context
-    fn push(&mut self, role: async_openai::types::Role, content: &str) -> Result<(), Error> {
+    fn push(&mut self, role: Role, content: &str) -> Result<(), Error> {
         match role {
-            async_openai::types::Role::User => self
+            Role::User => self
                 .get_context_mut()
                 .push(Message::new(Role::User, content.to_string())),
-            async_openai::types::Role::Assistant => {
+            Role::Assistant => {
                 self.get_context_mut()
                     .push(Message::new(Role::Assistant, content.to_string()));
             }
-            async_openai::types::Role::System => {
+            Role::System => {
                 self.get_context_mut()
                     .push(Message::new(Role::System, content.to_string()));
             }
@@ -47,6 +51,9 @@ pub trait Context {
 
     /// Get access right to read and write the context
     fn get_context_mut(&mut self) -> &mut MessageList;
+
+    /// Get a copy of the context
+    fn get_context(&self) -> MessageList;
 }
 
 pub trait GenerateJSON
@@ -63,7 +70,7 @@ where
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_json(&self, prompt: &Prompt, target: &str) -> Result<String, Error> {
+    fn generate_json(&self, task: &impl SystemPrompt, target: &str) -> Result<String, Error> {
         let runtime = tokio::runtime::Runtime::new()?;
         let result: String = runtime.block_on(async {
             let request = CreateChatCompletionRequestArgs::default()
@@ -74,7 +81,7 @@ where
                         .content(vec![
                             ChatCompletionRequestMessageContentPartTextArgs::default()
                                 .text(
-                                    prompt.to_string()
+                                    task.get_system_prompt()
                                         + "\nThis is the basis for generating a json:\n"
                                         + target,
                                 )
@@ -113,16 +120,16 @@ where
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_json_with_context(
-        &self,
-        context: impl Into<Vec<ChatCompletionRequestMessage>>,
-    ) -> Result<String, Error> {
-        let runtime = tokio::runtime::Runtime::new()?;
-        let result = runtime.block_on(async {
-            let request = CreateChatCompletionRequestArgs::default()
+    fn generate_json_with_context<T>(&self, task: &T) -> Result<String, Error>
+    where
+        T: SystemPrompt + Context,
+    {
+        let runtime: Runtime = tokio::runtime::Runtime::new()?;
+        let result: String = runtime.block_on(async {
+            let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
                 .model(&self.access_model().to_string())
                 .response_format(ResponseFormat::JsonObject)
-                .messages(context)
+                .messages(task.get_context())
                 .build()?;
 
             let response: CreateChatCompletionResponse =
@@ -149,7 +156,11 @@ where
     Self: IsLLM,
 {
     // TODO: Docs and Examples
-    async fn async_generate_json(&self, prompt: &Prompt, target: &str) -> Result<String, Error> {
+    async fn async_generate_json(
+        &self,
+        task: &impl SystemPrompt,
+        target: &str,
+    ) -> Result<String, Error> {
         let request = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
             .response_format(ResponseFormat::JsonObject)
@@ -158,7 +169,7 @@ where
                     .content(vec![
                         ChatCompletionRequestMessageContentPartTextArgs::default()
                             .text(
-                                prompt.to_string()
+                                task.get_system_prompt()
                                     + "\nThis is the basis for generating a json:\n"
                                     + target,
                             )
@@ -186,14 +197,14 @@ where
     }
 
     // TODO: Docs and Examples
-    async fn async_generate_json_with_context(
-        &self,
-        context: impl Into<Vec<ChatCompletionRequestMessage>>,
-    ) -> Result<String, Error> {
-        let request = CreateChatCompletionRequestArgs::default()
+    async fn async_generate_json_with_context<T>(&self, task: &T) -> Result<String, Error>
+    where
+        T: SystemPrompt + Context,
+    {
+        let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
             .response_format(ResponseFormat::JsonObject)
-            .messages(context)
+            .messages(task.get_context())
             .build()?;
 
         let response: CreateChatCompletionResponse =
