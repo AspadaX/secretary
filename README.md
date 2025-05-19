@@ -24,7 +24,7 @@ Or,
 
 ```toml
 [dependencies]
-secretary = "0.1.12"
+secretary = "0.2.11"
 ```
 
 ### Basic Example
