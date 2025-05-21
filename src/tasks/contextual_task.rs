@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::{
     message_list::{Message, MessageList, Role},
-    traits::{Context, SystemPrompt},
+    traits::{Context, FromJSON, SystemPrompt, ToJSON},
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -184,3 +184,7 @@ impl Context for ContextualTask {
         Ok(())
     }
 }
+
+impl ToJSON for ContextualTask {}
+
+impl FromJSON for ContextualTask {}

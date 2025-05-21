@@ -174,7 +174,6 @@ fn main() -> Result<()> {
     let mut turn: i32 = 1;
     loop {
         println!("\n--- Turn {} ---", turn);
-        dbg!(&prompt.get_context());
         
         // Generate JSON response from the contextual prompt
         let json_response = llm.generate_json_with_context(&prompt)?;
