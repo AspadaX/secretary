@@ -36,7 +36,7 @@ impl BasicTask {
     ///     kind: String,
     /// }
     ///
-    /// let example = Example {
+    /// let example = School {
     ///     name: "A school name".to_string(),
     ///     kind: "mid-school, high-school, or elementary school".to_string(),
     /// };
