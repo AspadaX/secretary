@@ -88,7 +88,7 @@ impl ContextualTask {
     }
     
     /// Cleaup a role's message in the chat history
-    pub fn cleanup_messages_by_role(&mut self, role: Role) {
+    fn cleanup_messages_by_role(&mut self, role: Role) {
         let mut messages_index: Vec<usize> = Vec::new();
         for (index, message) in self.context.iter().enumerate() {
             if message.role == role {
@@ -101,7 +101,7 @@ impl ContextualTask {
         }
     }
     
-    pub fn update_context_state(&mut self, contextual_task_prompt: &ContextualTaskPromptDataStructure) {
+    fn update_context_state(&mut self, contextual_task_prompt: &ContextualTaskPromptDataStructure) {
         self.context_state.reasoning = contextual_task_prompt.reasoning.clone();
         self.context_state.content = contextual_task_prompt.content.clone();
         self.context_state.data_structure = contextual_task_prompt.data_structure.clone();
