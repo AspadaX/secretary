@@ -304,3 +304,84 @@ where
         return Err(anyhow!("No response is retrieved from the LLM"));
     }
 }
+
+/// Enables serialization of data structures to JSON format.
+/// 
+/// Useful for persistence and state transfer between service instances.
+/// Particularly valuable in web services where object lifetime management
+/// is important and state needs to be reconstructed from client responses.
+///
+/// This trait provides a simple interface for converting any type that implements
+/// `serde::Serialize` into a JSON string representation. It's designed to work
+/// alongside the complementary `FromJSON` trait for full serialization/deserialization
+/// capabilities.
+///
+/// # Examples
+///
+/// ```
+/// use secretary::traits::ToJSON;
+///
+/// #[derive(serde::Serialize)]
+/// struct User {
+///     name: String,
+///     email: String,
+/// }
+///
+/// impl ToJSON for User {}
+///
+/// fn main() -> anyhow::Result<()> {
+///     let user = User {
+///         name: "Alice".to_string(),
+///         email: "alice@example.com".to_string(),
+///     };
+///     
+///     let json = user.to_json()?;
+///     println!("{}", json); // Outputs: {"name":"Alice","email":"alice@example.com"}
+///     Ok(())
+/// }
+/// ```
+pub trait ToJSON
+where
+    Self: serde::Serialize + Sized,
+{
+    fn to_json(&self) -> Result<String, Error> {
+        Ok(serde_json::to_string(self)?)
+    }
+}
+
+/// Enables creation of types from JSON string representation.
+/// 
+/// This trait provides deserialization capabilities complementary to 
+/// the `ToJSON` trait. It's particularly useful for reconstructing
+/// objects from client-provided JSON data in web services or for
+/// loading persisted application state.
+/// 
+/// # Examples
+/// 
+/// ```
+/// use secretary::traits::FromJSON;
+/// 
+/// #[derive(serde::Deserialize)]
+/// struct User {
+///     name: String,
+///     email: String,
+/// }
+/// 
+/// impl FromJSON for User {}
+/// 
+/// fn main() -> anyhow::Result<()> {
+///     let json = r#"{"name":"Alice","email":"alice@example.com"}"#;
+///     let user = User::from_json(json)?;
+///     assert_eq!(user.name, "Alice");
+///     assert_eq!(user.email, "alice@example.com");
+///     Ok(())
+/// }
+/// ```
+pub trait FromJSON {
+    fn from_json(json: &str) -> Result<Self, Error>
+    where
+        Self: for<'de> serde::Deserialize<'de> + Sized,
+    {
+        Ok(serde_json::from_str(json)?)
+    }
+}
