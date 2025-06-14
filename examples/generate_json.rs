@@ -33,7 +33,7 @@
 //! cargo run --example generate_json
 //! ```
 
-use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::{DataModel, GenerateJSON}};
+use secretary::{llm_providers::openai::OpenAILLM, tasks::basic_task::BasicTask, traits::{DataModel, GenerateJSON}};
 use serde::{Deserialize, Serialize};
 
 /// Define a structure that represents the expected JSON output schema.
