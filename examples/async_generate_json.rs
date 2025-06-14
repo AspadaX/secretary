@@ -37,7 +37,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 use anyhow::Result;
-use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::AsyncGenerateJSON};
+use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::{AsyncGenerateJSON, DataModel}};
 use serde::{Deserialize, Serialize};
 
 /// Schema defining the expected JSON output structure.
@@ -59,9 +59,9 @@ pub struct ProductReview {
     sentiment: String,
 }
 
-impl Default for ProductReview {
-    fn default() -> Self {
-        ProductReview {
+impl DataModel for ProductReview {
+    fn provide_data_model_instructions() -> Self {
+        Self {
             rating: 0,
             pros: Vec::new(),
             cons: Vec::new(),
@@ -96,8 +96,7 @@ async fn main() -> Result<()> {
     
     // Create a task template with our schema and analysis instructions
     // Also wrap in Arc for thread-safe sharing
-    let task: Arc<BasicTask> = Arc::new(BasicTask::new(
-        ProductReview::default(),
+    let task: Arc<BasicTask> = Arc::new(BasicTask::new::<ProductReview>(
         vec![
             "Extract key information from product reviews.".to_string(),
             "Rating should be an integer from 1-5 based on the reviewer's sentiment.".to_string(),

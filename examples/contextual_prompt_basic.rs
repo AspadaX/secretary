@@ -39,7 +39,7 @@ use secretary::{
     message_list::Role,
     openai::OpenAILLM,
     tasks::contextual_task::ContextualTask,
-    traits::{Context, GenerateJSON},
+    traits::{Context, DataModel, GenerateJSON},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -63,9 +63,9 @@ pub struct ProductAnalysis {
     competitive_advantage: Option<String>,
 }
 
-impl Default for ProductAnalysis {
-    fn default() -> Self {
-        ProductAnalysis {
+impl DataModel for ProductAnalysis {
+    fn provide_data_model_instructions() -> Self {
+        Self {
             category: String::from("product category"),
             target_audience: vec![String::from("example audience group")],
             key_features: vec![String::from("example feature")],
@@ -84,8 +84,7 @@ fn main() -> Result<()> {
     )?;
     
     // Create a contextual prompt with our product analysis schema
-    let mut prompt: ContextualTask = ContextualTask::new(
-        ProductAnalysis::default(),
+    let mut prompt: ContextualTask = ContextualTask::new::<ProductAnalysis>(
         vec![
             "Analyze the product description in detail.".to_string(),
             "Identify the likely category and target audience based on features.".to_string(),

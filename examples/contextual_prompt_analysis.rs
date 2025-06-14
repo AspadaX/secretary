@@ -39,7 +39,7 @@ use secretary::{
     message_list::Role,
     openai::OpenAILLM,
     tasks::contextual_task::ContextualTask,
-    traits::{Context, GenerateJSON},
+    traits::{Context, DataModel, GenerateJSON},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -72,9 +72,9 @@ pub struct SalesAnalysis {
     confidence: String,
 }
 
-impl Default for SalesAnalysis {
-    fn default() -> Self {
-        SalesAnalysis {
+impl DataModel for SalesAnalysis {
+    fn provide_data_model_instructions() -> Self {
+        Self {
             trend: String::from("increasing, decreasing, or stable"),
             top_categories: Vec::new(),
             underperforming_categories: Vec::new(),
@@ -156,8 +156,7 @@ fn main() -> Result<()> {
     )?;
     
     // Create a contextual prompt with our sales analysis schema
-    let mut prompt = ContextualTask::new(
-        SalesAnalysis::default(),
+    let mut prompt = ContextualTask::new::<SalesAnalysis>(
         vec![
             "Analyze the quarterly sales data to identify trends and patterns.".to_string(),
             "Show your mathematical reasoning in the reasoning field.".to_string(),

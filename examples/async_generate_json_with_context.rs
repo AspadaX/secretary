@@ -41,7 +41,7 @@ use secretary::{
     message_list::Role,
     openai::OpenAILLM,
     tasks::basic_task::BasicTask,
-    traits::{AsyncGenerateJSON, Context},
+    traits::{AsyncGenerateJSON, Context, DataModel},
 };
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
@@ -63,9 +63,9 @@ pub struct ProductInquiry {
     follow_up_questions: Option<Vec<String>>,
 }
 
-impl Default for ProductInquiry {
-    fn default() -> Self {
-        ProductInquiry {
+impl DataModel for ProductInquiry {
+    fn provide_data_model_instructions() -> Self {
+        Self {
             answer: String::new(),
             confidence: String::from("high, medium, or low"),
             needs_more_info: false,
@@ -110,8 +110,7 @@ async fn process_conversation(
     let start_time = Instant::now();
     
     // Create a task with our schema and instructions
-    let mut task = BasicTask::new(
-        ProductInquiry::default(),
+    let mut task = BasicTask::new::<ProductInquiry>(
         vec![
             "Provide helpful, accurate responses to customer product inquiries.".to_string(),
             "If you're uncertain, indicate lower confidence and ask for more details.".to_string(),

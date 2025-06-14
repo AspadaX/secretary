@@ -24,7 +24,7 @@
 //! cargo run --example product_review_analysis
 //! ```
 
-use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::GenerateJSON};
+use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::{DataModel, GenerateJSON}};
 use serde::{Deserialize, Serialize};
 
 /// Data structure representing the analysis of a product review
@@ -52,9 +52,9 @@ pub struct ReviewAnalysis {
     would_buy_again: Option<bool>,
 }
 
-impl Default for ReviewAnalysis {
-    fn default() -> Self {
-        ReviewAnalysis {
+impl DataModel for ReviewAnalysis {
+    fn provide_data_model_instructions() -> Self {
+        Self {
             sentiment: "The overall sentiment of the review (positive, negative, or mixed)".to_string(),
             rating: 0, // Will be populated with a value between 1-5
             pros: vec!["Positive aspects mentioned in the review".to_string()],
@@ -76,8 +76,7 @@ fn main() {
     .unwrap();
 
     // Create a task for review analysis
-    let task = BasicTask::new(
-        ReviewAnalysis::default(),
+    let task = BasicTask::new::<ReviewAnalysis>(
         vec![
             "Extract key information from product reviews".to_string(),
             "For 'rating', infer a 1-5 star rating based on the sentiment and content".to_string(),

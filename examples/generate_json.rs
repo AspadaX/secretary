@@ -33,7 +33,7 @@
 //! cargo run --example generate_json
 //! ```
 
-use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::GenerateJSON};
+use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::{DataModel, GenerateJSON}};
 use serde::{Deserialize, Serialize};
 
 /// Define a structure that represents the expected JSON output schema.
@@ -48,9 +48,9 @@ pub struct Sentiment {
     sentiment: String,
 }
 
-impl Default for Sentiment {
-    fn default() -> Self {
-        Sentiment {
+impl DataModel for Sentiment {
+    fn provide_data_model_instructions() -> Self {
+        Self {
             sentiment: String::from(
                 "rate the text in terms of their sentiments. it can be: high, low or mid.",
             ),
@@ -73,8 +73,7 @@ fn main() {
     //
     // These instructions help ensure more accurate and consistent results
     // by providing the LLM with specific guidance beyond just the schema.
-    let task = BasicTask::new(
-        Sentiment::default(),
+    let task = BasicTask::new::<Sentiment>(
         vec![
             "Consider the context when determining sentiment.".to_string(),
             "Pay attention to intensifiers and negations that might change sentiment.".to_string(),

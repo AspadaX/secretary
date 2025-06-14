@@ -39,7 +39,7 @@ use secretary::{
     message_list::Role, 
     openai::OpenAILLM, 
     tasks::basic_task::BasicTask, 
-    traits::{Context, GenerateJSON},
+    traits::{Context, DataModel, GenerateJSON},
 };
 use serde::{Deserialize, Serialize};
 
@@ -56,9 +56,9 @@ pub struct Sentiment {
     explanation: Option<String>,
 }
 
-impl Default for Sentiment {
-    fn default() -> Self {
-        Sentiment {
+impl DataModel for Sentiment {
+    fn provide_data_model_instructions() -> Self {
+        Self {
             sentiment: String::from(
                 "rate the text in terms of their sentiments. it can be: high, low or mid.",
             ),
@@ -79,8 +79,7 @@ fn main() {
     .unwrap();
 
     // Create a BasicTask with our schema and analysis instructions
-    let mut task = BasicTask::new(
-        Sentiment::default(), 
+    let mut task = BasicTask::new::<Sentiment>(
         vec![
             "Consider the full conversation context when determining sentiment.".to_string(),
             "Pay attention to intensifiers and negations that might change sentiment.".to_string(),

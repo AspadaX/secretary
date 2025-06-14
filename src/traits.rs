@@ -1,3 +1,6 @@
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
 use anyhow::{Error, Result, anyhow};
 use async_openai::{
     Client,
@@ -19,6 +22,33 @@ pub trait IsLLM {
 
     /// Provides access to the model identifier.
     fn access_model(&self) -> &str;
+}
+
+pub trait DataModel: Serialize + Deserialize<'static> {
+    /// Get the data model in JSON format with instructions specified.
+    fn get_data_model_instructions() -> Value {
+        serde_json::to_value(Self::provide_data_model_instructions()).expect("Failed to convert data model to JSON")
+    }
+    
+    /// Get the data model with instructions specified, which will be used 
+    /// to instruct the LLM for what to generate. Typically, this is the only method
+    /// you need to implement in the DataModel trait.
+    /// 
+    /// ```rust
+    /// pub struct Example {
+    ///     field: String,
+    /// }
+    /// 
+    /// impl DataModel for Example {
+    ///    fn get_data_model(&self) -> Self {
+    ///        Example {
+    ///           field: "Extract the field of the subject and put it here".to_string(),
+    ///        }
+    ///    }
+    /// }
+    /// 
+    /// ```
+    fn provide_data_model_instructions() -> Self;
 }
 
 /// Represent an object that has a system prompt

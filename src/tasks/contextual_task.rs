@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::{
     message_list::{Message, MessageList, Role},
-    traits::{Context, FromJSON, SystemPrompt, ToJSON},
+    traits::{Context, DataModel, FromJSON, SystemPrompt, ToJSON},
 };
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -69,16 +69,14 @@ impl ContextualTask {
     /// let prompt = ContextualTask::new(data);
     /// ```
     pub fn new<'de, T>(
-        data_structure_with_annotations: T,
         additional_instructions: Vec<String>,
     ) -> Self
     where
-        T: Deserialize<'de> + Serialize,
+        T: DataModel + std::fmt::Debug,
     {
-        let data_structure: Value = serde_json::to_value(data_structure_with_annotations).unwrap();
         Self {
             contextual_task_prompt_structure: ContextualTaskPromptDataStructure {
-                data_structure,
+                data_structure: T::get_data_model_instructions(),
                 ..Default::default()
             },
             additional_instructions,

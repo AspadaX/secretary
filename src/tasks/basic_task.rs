@@ -6,7 +6,7 @@ use serde_json::Value;
 
 use crate::{
     message_list::{Message, MessageList},
-    traits::{Context, FromJSON, SystemPrompt, ToJSON},
+    traits::{Context, DataModel, FromJSON, SystemPrompt, ToJSON},
 };
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -21,38 +21,16 @@ impl BasicTask {
     ///
     /// # Arguments
     ///
-    /// * `data_structure_with_annotations` - A data structure that can be serialized and deserialized.
+    /// * `data_structure_with_annotations` - A data structure that implements the `DataModel` trait.
     /// * `additional_instructions` - A string containing additional instructions.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use std::collections::HashMap;
-    /// use serde::{Deserialize, Serialize};
-    ///
-    /// #[derive(Deserialize, Serialize)]
-    /// struct School {
-    ///     name: String,
-    ///     kind: String,
-    /// }
-    ///
-    /// let example = School {
-    ///     name: "A school name".to_string(),
-    ///     kind: "mid-school, high-school, or elementary school".to_string(),
-    /// };
-    ///
-    /// let prompt = Prompt::new(example, ["Categorize the text".to_string(), "John School is mid-school".to_string()]);
-    /// ```
     pub fn new<'de, T>(
-        data_structure_with_annotations: T,
         additional_instructions: Vec<String>,
     ) -> Self
     where
-        T: Deserialize<'de> + Serialize + Debug,
+        T: DataModel + Debug,
     {
-        let data_structure: Value = serde_json::to_value(data_structure_with_annotations).unwrap();
         Self {
-            data_structure,
+            data_structure: T::get_data_model_instructions(),
             additional_instructions,
             context: MessageList::new(),
         }
@@ -61,7 +39,7 @@ impl BasicTask {
 
 impl SystemPrompt for BasicTask {
     fn get_system_prompt(&self) -> String {
-        let mut prompt = String::new();
+        let mut prompt: String = String::new();
         prompt.push_str("This is the json structure that you should strictly follow:\n");
         prompt.push_str(&serde_json::to_string(&self.data_structure).unwrap());
         prompt.push_str("\n");

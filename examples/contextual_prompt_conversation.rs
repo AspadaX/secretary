@@ -40,7 +40,7 @@ use secretary::{
     message_list::Role,
     openai::OpenAILLM,
     tasks::contextual_task::ContextualTask,
-    traits::{Context, GenerateJSON},
+    traits::{Context, DataModel, GenerateJSON},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -76,9 +76,9 @@ pub struct TripPlan {
     local_transportation: Option<String>,
 }
 
-impl Default for TripPlan {
-    fn default() -> Self {
-        TripPlan {
+impl DataModel for TripPlan {
+    fn provide_data_model_instructions() -> Self {
+         Self {
             destination: String::from("Destination city or location that the user would like to go to"),
             date_range: String::from("Date range for the user's trip"),
             budget: Some(String::from("The user's budget range in USD")),
@@ -156,8 +156,7 @@ fn main() -> Result<()> {
     )?;
     
     // Create a contextual prompt with our trip planning schema
-    let mut prompt = ContextualTask::new(
-        TripPlan::default(),
+    let mut prompt = ContextualTask::new::<TripPlan>(
         vec![
             "Help the user plan a trip by gathering information progressively.".to_string(),
             "Update the data_structure as you learn details about their trip plans.".to_string(),
