@@ -37,7 +37,7 @@
 
 use secretary::{
     message_list::Role, 
-    openai::OpenAILLM, 
+    llm_providers::openai::OpenAILLM, 
     tasks::basic_task::BasicTask, 
     traits::{Context, DataModel, GenerateJSON},
 };

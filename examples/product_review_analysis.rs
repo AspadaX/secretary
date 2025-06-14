@@ -24,7 +24,7 @@
 //! cargo run --example product_review_analysis
 //! ```
 
-use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::{DataModel, GenerateJSON}};
+use secretary::{llm_providers::openai::OpenAILLM, tasks::basic_task::BasicTask, traits::{DataModel, GenerateJSON}};
 use serde::{Deserialize, Serialize};
 
 /// Data structure representing the analysis of a product review

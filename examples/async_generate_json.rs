@@ -37,7 +37,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 use anyhow::Result;
-use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::{AsyncGenerateJSON, DataModel}};
+use secretary::{llm_providers::openai::OpenAILLM, tasks::basic_task::BasicTask, traits::{AsyncGenerateJSON, DataModel}};
 use serde::{Deserialize, Serialize};
 
 /// Schema defining the expected JSON output structure.

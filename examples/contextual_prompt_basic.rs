@@ -37,7 +37,7 @@
 use anyhow::Result;
 use secretary::{
     message_list::Role,
-    openai::OpenAILLM,
+    llm_providers::openai::OpenAILLM,
     tasks::contextual_task::ContextualTask,
     traits::{Context, DataModel, GenerateJSON},
 };
