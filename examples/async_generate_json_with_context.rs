@@ -39,7 +39,7 @@ use std::time::Instant;
 use anyhow::Result;
 use secretary::{
     message_list::Role,
-    openai::OpenAILLM,
+    llm_providers::openai::OpenAILLM,
     tasks::basic_task::BasicTask,
     traits::{AsyncGenerateJSON, Context, DataModel},
 };
