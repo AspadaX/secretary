@@ -97,11 +97,11 @@ impl MessageList {
     pub fn push(&mut self, message: Message) {
         self.messages.push(message);
     }
-    
+
     pub fn pop(&mut self) -> Option<Message> {
         self.messages.pop()
     }
-    
+
     pub fn remove(&mut self, index: usize) -> Option<Message> {
         if index < self.messages.len() {
             Some(self.messages.remove(index))
@@ -109,15 +109,15 @@ impl MessageList {
             None
         }
     }
-    
+
     pub fn iter(&self) -> std::slice::Iter<'_, Message> {
         self.messages.iter()
     }
-    
+
     pub fn len(&self) -> usize {
         self.messages.len()
     }
-    
+
     pub fn is_empty(&self) -> bool {
         self.messages.is_empty()
     }

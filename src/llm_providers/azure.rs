@@ -25,7 +25,12 @@ impl AzureOpenAILLM {
     /// # Returns
     ///
     /// * `Result<Self, Error>` - On success, returns an instance of the AzureOpenAILLM struct. On failure, returns an Error.
-    pub fn new(api_base: &str, api_key: &str, deployment_id: &str, api_version: &str) -> Result<Self, Error> {
+    pub fn new(
+        api_base: &str,
+        api_key: &str,
+        deployment_id: &str,
+        api_version: &str,
+    ) -> Result<Self, Error> {
         let llm_configuration: AzureConfig = AzureConfig::default()
             .with_deployment_id(deployment_id)
             .with_api_version(api_version)

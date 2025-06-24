@@ -28,7 +28,7 @@ cargo add secretary
 ```rust
 use secretary::Task;
 use secretary::llm_providers::openai::OpenAILLM;
-use secretary::traits::GenerateJSON;
+use secretary::traits::GenerateData;
 use serde::{Serialize, Deserialize};
 
 // Define your data structure with extraction instructions
@@ -70,10 +70,8 @@ fn main() -> anyhow::Result<()> {
     
     // Process natural language input
     let input = "Hi, I'm Jane Smith, 29 years old. My email is jane@example.com. I love hiking, coding, and playing piano.";
-    let json_result = llm.generate_json(&task, input)?;
-    
-    // Parse result back to struct
-    let person: PersonInfo = serde_json::from_str(&json_result)?;
+    // Process natural language input and get structured data directly
+    let person: PersonInfo = llm.generate_data(&task, input)?;
     println!("{:#?}", person);
     
     Ok(())
@@ -126,7 +124,7 @@ struct ProductInfo {
 Secretary provides full async support for concurrent processing:
 
 ```rust
-use secretary::traits::AsyncGenerateJSON;
+use secretary::traits::AsyncGenerateData;
 use tokio;
 
 #[tokio::main]
@@ -145,7 +143,7 @@ async fn main() -> anyhow::Result<()> {
         let llm = &llm;
         let task = &task;
         async move {
-            llm.async_generate_json(task, input).await
+            llm.async_generate_data(task, input).await
         }
     }).collect();
     
@@ -175,14 +173,14 @@ fn main() -> anyhow::Result<()> {
     
     // First interaction
     task.push(Role::User, "Hi, I'm John")?;
-    let response1 = llm.generate_json(&task, "")?;
-    task.push(Role::Assistant, &response1)?;
+    let response1: PersonInfo = llm.generate_data_with_context(&task)?;
+    task.push(Role::Assistant, &serde_json::to_string(&response1)?)?;
     
     // Continue conversation with context
     task.push(Role::User, "I'm 25 years old and love programming")?;
-    let response2 = llm.generate_json(&task, "")?;
+    let response2: PersonInfo = llm.generate_data_with_context(&task)?;
     
-    println!("Final result: {}", response2);
+    println!("Final result: {:#?}", response2);
     Ok(())
 }
 ```
@@ -208,20 +206,22 @@ println!("{}", prompt);
 The `examples/` directory contains practical demonstrations:
 
 ### Basic Usage
-- **`derive_example.rs`** - Basic person information extraction
-- **`async_example.rs`** - Async product information extraction with comprehensive testing
+- **`sync.rs`** - Basic person information extraction using synchronous API
+- **`async.rs`** - Async product information extraction with comprehensive testing
 
 Run examples with:
 ```bash
-# Basic example (no API key required for demo)
-cargo run --example derive_example
+# Basic synchronous example
+cargo run --example sync
 
-# Async example (no API key required for demo)
-cargo run --example async_example
+# Async example with comprehensive testing
+cargo run --example async
 
-# To test with real API (uncomment API calls in examples):
-export OPENAI_API_KEY="your-api-key"
-cargo run --example async_example
+# To test with real API, set environment variables:
+export SECRETARY_OPENAI_API_BASE="https://api.openai.com/v1"
+export SECRETARY_OPENAI_API_KEY="your-api-key"
+export SECRETARY_OPENAI_MODEL="gpt-4"
+cargo run --example async
 ```
 
 ## Environment Setup
@@ -229,24 +229,79 @@ cargo run --example async_example
 For production use with OpenAI:
 
 ```bash
-export OPENAI_API_KEY="your-openai-api-key"
+export SECRETARY_OPENAI_API_BASE="https://api.openai.com/v1"
+export SECRETARY_OPENAI_API_KEY="your-openai-api-key"
+export SECRETARY_OPENAI_MODEL="gpt-4"
 ```
 
 In your code:
 ```rust
-let api_key = std::env::var("OPENAI_API_KEY")
-    .expect("OPENAI_API_KEY environment variable not set");
+let api_base = std::env::var("SECRETARY_OPENAI_API_BASE")
+    .expect("SECRETARY_OPENAI_API_BASE environment variable not set");
+let api_key = std::env::var("SECRETARY_OPENAI_API_KEY")
+    .expect("SECRETARY_OPENAI_API_KEY environment variable not set");
+let model = std::env::var("SECRETARY_OPENAI_MODEL")
+    .expect("SECRETARY_OPENAI_MODEL environment variable not set");
 
-let llm = OpenAILLM::new(
-    "https://api.openai.com/v1",
-    &api_key,
-    "gpt-4"
-)?;
+let llm = OpenAILLM::new(&api_base, &api_key, &model)?;
 ```
+
+## API Reference
+
+### Core Traits
+
+| Trait | Purpose | Key Methods |
+|-------|---------|-------------|
+| `Task` | Main trait for data extraction tasks | `new()`, `get_system_prompt()`, `push()` |
+| `GenerateData` | Synchronous LLM interaction | `generate_data()`, `generate_data_with_context()` |
+| `AsyncGenerateData` | Asynchronous LLM interaction | `async_generate_data()`, `async_generate_data_with_context()` |
+| `IsLLM` | LLM provider abstraction | `access_client()`, `access_model()` |
+| `ToJSON`/`FromJSON` | Serialization utilities | `to_json()`, `from_json()` |
+
+### Derive Macro Attributes
+
+- `#[derive(Task)]` - Implements the Task trait automatically
+- `#[task(instruction = "...")]` - Provides field-specific extraction instructions
+- `#[serde(skip)]` - Required for `context` and `additional_instructions` fields
+
+## Troubleshooting
+
+### Common Issues
+
+**"Failed to execute function" Error**
+- Check your API key and endpoint configuration
+- Verify network connectivity
+- Ensure the model name is correct
+
+**Serialization Errors**
+- Ensure all data fields implement `Serialize` and `Deserialize`
+- Check that field types match the expected JSON structure
+- Verify that optional fields are properly handled
+
+**Context Management Issues**
+- Remember to include required fields: `context` and `additional_instructions`
+- Mark these fields with `#[serde(skip)]`
+- Use `push()` method to add messages to context
+
+### Performance Tips
+
+- Use async methods for concurrent processing
+- Batch multiple requests when possible
+- Consider caching LLM responses for repeated queries
+- Use specific field instructions to improve extraction accuracy
+
+## Roadmap
+
+- [ ] Support for additional LLM providers (Anthropic, Azure OpenAI, etc.)
+- [ ] Enhanced error handling and validation
+- [ ] Performance optimizations and caching
+- [ ] Integration with more serialization formats
+- [ ] Advanced prompt engineering features
+- [ ] Streaming response support
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! 
 
 ## License
 

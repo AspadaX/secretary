@@ -29,29 +29,30 @@ pub trait IsLLM {
 
 /// The main Task trait that combines data model, system prompt, and context functionality.
 /// This trait should be implemented using the derive macro for user-defined structs.
-pub trait Task: Serialize + for <'de> Deserialize<'de> + Default {
+pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
     /// Create a new instance with additional instructions
     fn new_with_instructions(additional_instructions: Vec<String>) -> Self;
-    
+
     /// Get the data model in JSON format with instructions specified.
     fn get_data_model_instructions() -> Value {
-        serde_json::to_value(Self::provide_data_model_instructions()).expect("Failed to convert data model to JSON")
+        serde_json::to_value(Self::provide_data_model_instructions())
+            .expect("Failed to convert data model to JSON")
     }
-    
-    /// Get the data model with instructions specified, which will be used 
+
+    /// Get the data model with instructions specified, which will be used
     /// to instruct the LLM for what to generate. Typically, this is the only method
     /// you need to implement in the DataModel trait.
-    /// 
+    ///
     /// ```rust
     /// use secretary::traits::Task;
     /// use secretary::message_list::MessageList;
     /// use serde::{Serialize, Deserialize};
-    /// 
+    ///
     /// #[derive(Serialize, Deserialize, Default)]
     /// pub struct Example {
     ///     field: String,
     /// }
-    /// 
+    ///
     /// impl Task for Example {
     ///    fn new_with_instructions(_instructions: Vec<String>) -> Self {
     ///        Self::default()
@@ -87,25 +88,25 @@ pub trait Task: Serialize + for <'de> Deserialize<'de> + Default {
     ///        unimplemented!()
     ///    }
     /// }
-    /// 
+    ///
     /// ```
     fn provide_data_model_instructions() -> Self;
-    
+
     /// Get the system prompt (combines SystemPrompt functionality)
     fn get_system_prompt(&self) -> String;
-    
+
     /// Update the context (from Context trait)
     fn push(&mut self, role: Role, content: &str) -> Result<(), Error>;
-    
+
     /// Get access right to read and write the context
     fn get_context_mut(&mut self) -> &mut MessageList;
-    
+
     /// Get a copy of the context
     fn get_context(&self) -> MessageList;
-    
+
     /// Get additional instructions
     fn get_additional_instructions(&self) -> &Vec<String>;
-    
+
     /// Set additional instructions
     fn set_additional_instructions(&mut self, instructions: Vec<String>);
 }
@@ -189,10 +190,10 @@ where
 
             return Err(anyhow!("No response is retrieved from the LLM"));
         })?;
-        
+
         Ok(serde_json::from_str(&result)?)
     }
-    
+
     /// Generates JSON response from the LLM based on the provided context.
     ///
     /// # Arguments
@@ -251,64 +252,31 @@ where
     ///
     /// ```no_run
     /// use secretary::llm_providers::openai::OpenAILLM;
-    /// use secretary::traits::{AsyncGenerateJSON, Task};
-    /// use secretary::message_list::{MessageList, Role};
+    /// use secretary::traits::{AsyncGenerateData, Task};
     /// use serde::{Deserialize, Serialize};
     ///
-    /// #[derive(Debug, Serialize, Deserialize, Default)]
+    /// #[derive(Task, Debug, Serialize, Deserialize, Default)]
     /// struct MyData {
+    ///     #[serde(skip)]
+    ///     pub context: secretary::MessageList,
+    ///     #[serde(skip)]
+    ///     pub additional_instructions: Vec<String>,
+    ///     
+    ///     #[task(instruction = "Extract the field value")]
     ///     field: String,
-    /// }
-    ///
-    /// impl Task for MyData {
-    ///     fn new_with_instructions(_instructions: Vec<String>) -> Self {
-    ///         Self::default()
-    ///     }
-    ///     
-    ///     fn provide_data_model_instructions() -> Self {
-    ///         MyData { field: "Description for field".to_string() }
-    ///     }
-    ///     
-    ///     fn get_system_prompt(&self) -> String {
-    ///         "Extract data".to_string()
-    ///     }
-    ///     
-    ///     fn push(&mut self, _role: Role, _content: &str) -> Result<(), anyhow::Error> {
-    ///         Ok(())
-    ///     }
-    ///     
-    ///     fn get_context_mut(&mut self) -> &mut MessageList {
-    ///         unimplemented!()
-    ///     }
-    ///     
-    ///     fn get_context(&self) -> MessageList {
-    ///         MessageList::new()
-    ///     }
-    ///     
-    ///     fn get_additional_instructions(&self) -> &Vec<String> {
-    ///         unimplemented!()
-    ///     }
-    ///     
-    ///     fn set_additional_instructions(&mut self, _instructions: Vec<String>) {
-    ///         unimplemented!()
-    ///     }
     /// }
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
     ///     let llm = OpenAILLM::new("api_base", "api_key", "model")?;
-    ///     let task = MyData::default();
+    ///     let task = MyData::new(vec![]);
     ///     
-    ///     let result = llm.async_generate_json(&task, "Some text with info").await?;
-    ///     println!("{}", result);
+    ///     let result: MyData = llm.async_generate_data(&task, "Some text with info").await?;
+    ///     println!("{:#?}", result);
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_data<T: Task>(
-        &self,
-        task: &T,
-        target: &str,
-    ) -> Result<T, Error> {
+    async fn async_generate_data<T: Task>(&self, task: &T, target: &str) -> Result<T, Error> {
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
             .response_format(ResponseFormat::JsonObject)
@@ -361,65 +329,36 @@ where
     ///
     /// ```no_run
     /// use secretary::llm_providers::openai::OpenAILLM;
-    /// use secretary::traits::{AsyncGenerateJSON, Task};
-    /// use secretary::message_list::{MessageList, Role};
+    /// use secretary::traits::{AsyncGenerateData, Task};
+    /// use secretary::message_list::Role;
     /// use serde::{Deserialize, Serialize};
     ///
-    /// #[derive(Debug, Serialize, Deserialize, Default)]
+    /// #[derive(Task, Debug, Serialize, Deserialize, Default)]
     /// struct MyData {
+    ///     #[serde(skip)]
+    ///     pub context: secretary::MessageList,
+    ///     #[serde(skip)]
+    ///     pub additional_instructions: Vec<String>,
+    ///     
+    ///     #[task(instruction = "Extract the field value")]
     ///     field: String,
-    /// }
-    ///
-    /// impl Task for MyData {
-    ///     fn new_with_instructions(_instructions: Vec<String>) -> Self {
-    ///         Self::default()
-    ///     }
-    ///     
-    ///     fn provide_data_model_instructions() -> Self {
-    ///         MyData { field: "Description for field".to_string() }
-    ///     }
-    ///     
-    ///     fn get_system_prompt(&self) -> String {
-    ///         "Extract data".to_string()
-    ///     }
-    ///     
-    ///     fn push(&mut self, _role: Role, _content: &str) -> Result<(), anyhow::Error> {
-    ///         Ok(())
-    ///     }
-    ///     
-    ///     fn get_context_mut(&mut self) -> &mut MessageList {
-    ///         unimplemented!()
-    ///     }
-    ///     
-    ///     fn get_context(&self) -> MessageList {
-    ///         MessageList::new()
-    ///     }
-    ///     
-    ///     fn get_additional_instructions(&self) -> &Vec<String> {
-    ///         unimplemented!()
-    ///     }
-    ///     
-    ///     fn set_additional_instructions(&mut self, _instructions: Vec<String>) {
-    ///         unimplemented!()
-    ///     }
     /// }
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
     ///     let llm = OpenAILLM::new("api_base", "api_key", "model")?;
-    ///     let mut task = MyData::default();
+    ///     let mut task = MyData::new(vec![]);
     ///     
     ///     // Add messages to the conversation context
     ///     task.push(Role::User, "Here's my first message")?;
     ///     
     ///     // Generate response with context
-    ///     let result = llm.async_generate_json_with_context(&task).await?;
-    ///     println!("{}", result);
+    ///     let result: MyData = llm.async_generate_data_with_context(&task).await?;
+    ///     println!("{:#?}", result);
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_data_with_context<T: Task>(&self, task: &T) -> Result<T, Error>
-    {
+    async fn async_generate_data_with_context<T: Task>(&self, task: &T) -> Result<T, Error> {
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
             .response_format(ResponseFormat::JsonObject)
@@ -443,7 +382,7 @@ where
 }
 
 /// Enables serialization of data structures to JSON format.
-/// 
+///
 /// Useful for persistence and state transfer between service instances.
 /// Particularly valuable in web services where object lifetime management
 /// is important and state needs to be reconstructed from client responses.
@@ -487,25 +426,25 @@ where
 }
 
 /// Enables creation of types from JSON string representation.
-/// 
-/// This trait provides deserialization capabilities complementary to 
+///
+/// This trait provides deserialization capabilities complementary to
 /// the `ToJSON` trait. It's particularly useful for reconstructing
 /// objects from client-provided JSON data in web services or for
 /// loading persisted application state.
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```
 /// use secretary::traits::FromJSON;
-/// 
+///
 /// #[derive(serde::Deserialize)]
 /// struct User {
 ///     name: String,
 ///     email: String,
 /// }
-/// 
+///
 /// impl FromJSON for User {}
-/// 
+///
 /// fn main() -> anyhow::Result<()> {
 ///     let json = r#"{"name":"Alice","email":"alice@example.com"}"#;
 ///     let user = User::from_json(json)?;
