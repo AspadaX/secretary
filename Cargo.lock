@@ -1080,7 +1080,7 @@ version = "0.3.10"
 dependencies = [
  "anyhow",
  "async-openai",
- "secretary-derive",
+ "secretary-derive 0.3.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
  "tokio",
@@ -1089,6 +1089,17 @@ dependencies = [
 [[package]]
 name = "secretary-derive"
 version = "0.3.10"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "secretary-derive"
+version = "0.3.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eea22eebd8808cd9177ed471a40506a12b2655d371b08f1ac6893b8fbfd757a9"
 dependencies = [
  "proc-macro2",
  "quote",
