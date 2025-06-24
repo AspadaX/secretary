@@ -82,7 +82,7 @@ impl From<Message> for ChatCompletionRequestMessage {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Default)]
 pub struct MessageList {
     messages: Vec<Message>,
 }
@@ -112,6 +112,14 @@ impl MessageList {
     
     pub fn iter(&self) -> std::slice::Iter<'_, Message> {
         self.messages.iter()
+    }
+    
+    pub fn len(&self) -> usize {
+        self.messages.len()
+    }
+    
+    pub fn is_empty(&self) -> bool {
+        self.messages.is_empty()
     }
 }
 

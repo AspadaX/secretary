@@ -15,6 +15,9 @@ use tokio::runtime::Runtime;
 
 use crate::message_list::{Message, MessageList, Role};
 
+// Re-export the derive macro
+pub use secretary_derive::Task;
+
 /// Implement this for various LLM API standards
 pub trait IsLLM {
     /// Provides access to the client instance.
@@ -24,7 +27,12 @@ pub trait IsLLM {
     fn access_model(&self) -> &str;
 }
 
-pub trait DataModel: Serialize + Deserialize<'static> {
+/// The main Task trait that combines data model, system prompt, and context functionality.
+/// This trait should be implemented using the derive macro for user-defined structs.
+pub trait Task: Serialize + Deserialize<'static> + Default {
+    /// Create a new instance with additional instructions
+    fn new_with_instructions(additional_instructions: Vec<String>) -> Self;
+    
     /// Get the data model in JSON format with instructions specified.
     fn get_data_model_instructions() -> Value {
         serde_json::to_value(Self::provide_data_model_instructions()).expect("Failed to convert data model to JSON")
@@ -35,29 +43,74 @@ pub trait DataModel: Serialize + Deserialize<'static> {
     /// you need to implement in the DataModel trait.
     /// 
     /// ```rust
+    /// use secretary::traits::Task;
+    /// use secretary::message_list::MessageList;
+    /// use serde::{Serialize, Deserialize};
+    /// 
+    /// #[derive(Serialize, Deserialize, Default)]
     /// pub struct Example {
     ///     field: String,
     /// }
     /// 
-    /// impl DataModel for Example {
-    ///    fn get_data_model(&self) -> Self {
+    /// impl Task for Example {
+    ///    fn new_with_instructions(_instructions: Vec<String>) -> Self {
+    ///        Self::default()
+    ///    }
+    ///    
+    ///    fn provide_data_model_instructions() -> Self {
     ///        Example {
     ///           field: "Extract the field of the subject and put it here".to_string(),
     ///        }
+    ///    }
+    ///    
+    ///    fn get_system_prompt(&self) -> String {
+    ///        "Extract data".to_string()
+    ///    }
+    ///    
+    ///    fn push(&mut self, _role: secretary::message_list::Role, _content: &str) -> Result<(), anyhow::Error> {
+    ///        Ok(())
+    ///    }
+    ///    
+    ///    fn get_context_mut(&mut self) -> &mut MessageList {
+    ///        unimplemented!()
+    ///    }
+    ///    
+    ///    fn get_context(&self) -> MessageList {
+    ///        MessageList::new()
+    ///    }
+    ///    
+    ///    fn get_additional_instructions(&self) -> &Vec<String> {
+    ///        unimplemented!()
+    ///    }
+    ///    
+    ///    fn set_additional_instructions(&mut self, _instructions: Vec<String>) {
+    ///        unimplemented!()
     ///    }
     /// }
     /// 
     /// ```
     fn provide_data_model_instructions() -> Self;
-}
-
-/// Represent an object that has a system prompt
-pub trait SystemPrompt {
-    /// Get the system prompt
+    
+    /// Get the system prompt (combines SystemPrompt functionality)
     fn get_system_prompt(&self) -> String;
+    
+    /// Update the context (from Context trait)
+    fn push(&mut self, role: Role, content: &str) -> Result<(), Error>;
+    
+    /// Get access right to read and write the context
+    fn get_context_mut(&mut self) -> &mut MessageList;
+    
+    /// Get a copy of the context
+    fn get_context(&self) -> MessageList;
+    
+    /// Get additional instructions
+    fn get_additional_instructions(&self) -> &Vec<String>;
+    
+    /// Set additional instructions
+    fn set_additional_instructions(&mut self, instructions: Vec<String>);
 }
 
-/// Implement this for context management
+/// Implement this for context management (kept for backward compatibility)
 pub trait Context {
     /// Update the context
     fn push(&mut self, role: Role, content: &str) -> Result<(), Error> {
@@ -73,7 +126,6 @@ pub trait Context {
                 self.get_context_mut()
                     .push(Message::new(Role::System, content.to_string()));
             }
-            _ => return Err(anyhow!("Unsupported role")),
         }
 
         Ok(())
@@ -94,13 +146,13 @@ where
     ///
     /// # Arguments
     ///
-    /// * `prompt` - A string slice that holds the prompt to be sent to the LLM.
+    /// * `task` - A Task implementation that provides the system prompt and schema.
     /// * `target` - A string slice that holds the data to be sent to the LLM to generate a json.
     ///
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_json(&self, task: &impl SystemPrompt, target: &str) -> Result<String, Error> {
+    fn generate_json(&self, task: &impl Task, target: &str) -> Result<String, Error> {
         let runtime = tokio::runtime::Runtime::new()?;
         let result: String = runtime.block_on(async {
             let request = CreateChatCompletionRequestArgs::default()
@@ -140,20 +192,17 @@ where
 
         Ok(result)
     }
-
+    
     /// Generates JSON response from the LLM based on the provided context.
     ///
     /// # Arguments
     ///
-    /// * `context` - A collection of `ChatCompletionRequestMessage` instances that provide the context to be sent to the LLM.
+    /// * `task` - A Task implementation that provides both system prompt and context.
     ///
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_json_with_context<T>(&self, task: &T) -> Result<String, Error>
-    where
-        T: SystemPrompt + Context,
-    {
+    fn generate_json_with_context(&self, task: &impl Task) -> Result<String, Error> {
         let runtime: Runtime = tokio::runtime::Runtime::new()?;
         let result: String = runtime.block_on(async {
             let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
@@ -191,7 +240,7 @@ where
     ///
     /// # Arguments
     ///
-    /// * `task` - An implementation of `SystemPrompt` containing schema and instructions.
+    /// * `task` - A Task implementation that provides the system prompt and schema.
     /// * `target` - A string slice that holds the data to be sent to the LLM to generate a json.
     ///
     /// # Returns
@@ -200,22 +249,55 @@ where
     ///
     /// # Example
     ///
-    /// ```
-    /// use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::AsyncGenerateJSON};
+    /// ```no_run
+    /// use secretary::llm_providers::openai::OpenAILLM;
+    /// use secretary::traits::{AsyncGenerateJSON, Task};
+    /// use secretary::message_list::{MessageList, Role};
     /// use serde::{Deserialize, Serialize};
     ///
-    /// #[derive(Debug, Serialize, Deserialize)]
+    /// #[derive(Debug, Serialize, Deserialize, Default)]
     /// struct MyData {
     ///     field: String,
+    /// }
+    ///
+    /// impl Task for MyData {
+    ///     fn new_with_instructions(_instructions: Vec<String>) -> Self {
+    ///         Self::default()
+    ///     }
+    ///     
+    ///     fn provide_data_model_instructions() -> Self {
+    ///         MyData { field: "Description for field".to_string() }
+    ///     }
+    ///     
+    ///     fn get_system_prompt(&self) -> String {
+    ///         "Extract data".to_string()
+    ///     }
+    ///     
+    ///     fn push(&mut self, _role: Role, _content: &str) -> Result<(), anyhow::Error> {
+    ///         Ok(())
+    ///     }
+    ///     
+    ///     fn get_context_mut(&mut self) -> &mut MessageList {
+    ///         unimplemented!()
+    ///     }
+    ///     
+    ///     fn get_context(&self) -> MessageList {
+    ///         MessageList::new()
+    ///     }
+    ///     
+    ///     fn get_additional_instructions(&self) -> &Vec<String> {
+    ///         unimplemented!()
+    ///     }
+    ///     
+    ///     fn set_additional_instructions(&mut self, _instructions: Vec<String>) {
+    ///         unimplemented!()
+    ///     }
     /// }
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
     ///     let llm = OpenAILLM::new("api_base", "api_key", "model")?;
-    ///     let task = BasicTask::new(
-    ///         MyData { field: "Description for field".to_string() },
-    ///         vec!["Extract data from the text".to_string()],
-    ///     );
+    ///     let task = MyData::default();
     ///     
     ///     let result = llm.async_generate_json(&task, "Some text with info").await?;
     ///     println!("{}", result);
@@ -224,10 +306,10 @@ where
     /// ```
     async fn async_generate_json(
         &self,
-        task: &impl SystemPrompt,
+        task: &impl Task,
         target: &str,
     ) -> Result<String, Error> {
-        let request = CreateChatCompletionRequestArgs::default()
+        let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
             .response_format(ResponseFormat::JsonObject)
             .messages(vec![
@@ -269,8 +351,7 @@ where
     ///
     /// # Arguments
     ///
-    /// * `task` - An implementation of both `SystemPrompt` and `Context` traits that provides
-    ///            both the schema definition and conversation history.
+    /// * `task` - A Task implementation that provides both the schema definition and conversation history.
     ///
     /// # Returns
     ///
@@ -278,27 +359,55 @@ where
     ///
     /// # Example
     ///
-    /// ```
-    /// use secretary::{
-    ///     message_list::Role,
-    ///     openai::OpenAILLM,
-    ///     tasks::basic_task::BasicTask,
-    ///     traits::{AsyncGenerateJSON, Context},
-    /// };
+    /// ```no_run
+    /// use secretary::llm_providers::openai::OpenAILLM;
+    /// use secretary::traits::{AsyncGenerateJSON, Task};
+    /// use secretary::message_list::{MessageList, Role};
     /// use serde::{Deserialize, Serialize};
     ///
-    /// #[derive(Debug, Serialize, Deserialize)]
+    /// #[derive(Debug, Serialize, Deserialize, Default)]
     /// struct MyData {
     ///     field: String,
+    /// }
+    ///
+    /// impl Task for MyData {
+    ///     fn new_with_instructions(_instructions: Vec<String>) -> Self {
+    ///         Self::default()
+    ///     }
+    ///     
+    ///     fn provide_data_model_instructions() -> Self {
+    ///         MyData { field: "Description for field".to_string() }
+    ///     }
+    ///     
+    ///     fn get_system_prompt(&self) -> String {
+    ///         "Extract data".to_string()
+    ///     }
+    ///     
+    ///     fn push(&mut self, _role: Role, _content: &str) -> Result<(), anyhow::Error> {
+    ///         Ok(())
+    ///     }
+    ///     
+    ///     fn get_context_mut(&mut self) -> &mut MessageList {
+    ///         unimplemented!()
+    ///     }
+    ///     
+    ///     fn get_context(&self) -> MessageList {
+    ///         MessageList::new()
+    ///     }
+    ///     
+    ///     fn get_additional_instructions(&self) -> &Vec<String> {
+    ///         unimplemented!()
+    ///     }
+    ///     
+    ///     fn set_additional_instructions(&mut self, _instructions: Vec<String>) {
+    ///         unimplemented!()
+    ///     }
     /// }
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
     ///     let llm = OpenAILLM::new("api_base", "api_key", "model")?;
-    ///     let mut task = BasicTask::new(
-    ///         MyData { field: "Description for field".to_string() },
-    ///         vec!["Extract data from the text".to_string()],
-    ///     );
+    ///     let mut task = MyData::default();
     ///     
     ///     // Add messages to the conversation context
     ///     task.push(Role::User, "Here's my first message")?;
@@ -309,9 +418,7 @@ where
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_json_with_context<T>(&self, task: &T) -> Result<String, Error>
-    where
-        T: SystemPrompt + Context,
+    async fn async_generate_json_with_context(&self, task: &impl Task) -> Result<String, Error>
     {
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())

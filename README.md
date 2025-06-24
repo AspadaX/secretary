@@ -1,18 +1,21 @@
-# Secretary 🚀
+# Secretary
 
 [![Crates.io](https://img.shields.io/crates/v/secretary.svg)](https://crates.io/crates/secretary)
 [![API Docs](https://docs.rs/secretary/badge.svg)](https://docs.rs/secretary)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Secretary** is a Rust library that translates natural language into structured data using large language models (LLMs). It provides a simple, type-safe way to extract structured information from unstructured text.
+**Secretary** is a Rust library that transforms natural language into structured data using large language models (LLMs). With its powerful derive macro system, you can extract structured information from unstructured text with minimal boilerplate code.
 
 ## Features
 
-- 🔍 **Schema-Based Extraction**: Define your data structure using Rust structs and let LLMs extract matching data
+- 🚀 **Unified Task Trait**: Single trait combining data extraction, schema definition, and system prompt generation with `#[derive(Task)]`
+- 🔍 **Schema-Based Extraction**: Define your data structure using Rust structs with field-level instructions
 - 🔄 **Context-Aware Conversations**: Maintain conversation state for multi-turn interactions
-- 🧠 **Progressive Data Building**: Incrementally build complex data structures through conversational interactions
-- 📋 **Declarative Schema Annotations**: Document your schemas with field descriptions that guide the LLM
+- 📋 **Declarative Field Instructions**: Use `#[task(instruction = "...")]` attributes to guide extraction
+- ⚡ **Async Support**: Built-in async/await support for concurrent processing
 - 🔌 **Extensible LLM Support**: Currently supports OpenAI API with more providers planned
+- 🛡️ **Type Safety**: Leverage Rust's type system for reliable data extraction
+- 🧹 **Simplified API**: Consolidated traits reduce boilerplate and complexity
 
 ## Quick Start
 
@@ -20,248 +23,253 @@
 cargo add secretary
 ```
 
-Or, 
-
-```toml
-[dependencies]
-secretary = "0.2.30"
-```
-
 ### Basic Example
 
 ```rust
-use secretary::{
-    llm_providers::openai::OpenAILLM, 
-    tasks::basic_task::BasicTask, 
-    traits::{DataModel, GenerateJSON}
-};
-use serde::{Deserialize, Serialize};
+use secretary::Task;
+use secretary::llm_providers::openai::OpenAILLM;
+use secretary::traits::GenerateJSON;
+use serde::{Serialize, Deserialize};
 
-// Define your output schema
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct UserInfo {
-    name: String,
-    age: u8,
-    interests: Vec<String>,
-}
-
-// Implement DataModel to provide instructions for the schema
-impl DataModel for UserInfo {
-    fn provide_data_model_instructions() -> Self {
-        Self {
-            name: "User's full name".to_string(),
-            age: 0, // Age in years
-            interests: vec!["List of user's hobbies or interests".to_string()],
-        }
-    }
-}
-
-fn main() {
-    // Initialize LLM client with environment variables
-    let llm = OpenAILLM::new(
-        &std::env::var("SECRETARY_OPENAI_API_BASE").unwrap(),
-        &std::env::var("SECRETARY_OPENAI_API_KEY").unwrap(),
-        &std::env::var("SECRETARY_OPENAI_MODEL").unwrap(),
-    ).unwrap();
-
-    // Create a task with schema and additional instructions
-    let task = BasicTask::new::<UserInfo>(
-        vec![
-            "Extract the user's personal information from the text.".to_string(),
-            "Include all interests mentioned in the text.".to_string(),
-        ],
-    );
-
-    // Process natural language input
-    let input = "Hi, I'm Jane Smith, 29 years old. I love hiking, coding, and playing piano.";
-    let json_result = llm.generate_json(&task, input).unwrap();
+// Define your data structure with extraction instructions
+#[derive(Task, Serialize, Deserialize, Debug, Default)]
+struct PersonInfo {
+    // Required fields for Task trait
+    #[serde(skip)]
+    pub context: secretary::MessageList,
+    #[serde(skip)]
+    pub additional_instructions: Vec<String>,
     
-    println!("{}", json_result);
-    // Output: {"name":"Jane Smith","age":29,"interests":["hiking","coding","playing piano"]}
+    // Data fields with specific extraction instructions
+    #[task(instruction = "Extract the person's full name")]
+    pub name: String,
+    
+    #[task(instruction = "Extract age as a number")]
+    pub age: u32,
+    
+    #[task(instruction = "Extract email address if mentioned")]
+    pub email: Option<String>,
+    
+    #[task(instruction = "List all hobbies or interests mentioned")]
+    pub interests: Vec<String>,
+}
+
+fn main() -> anyhow::Result<()> {
+    // Create a task instance with additional instructions
+    let task = PersonInfo::new(vec![
+        "Be precise with personal information".to_string(),
+        "Use 'Unknown' for missing data".to_string(),
+    ]);
+    
+    // Initialize LLM client
+    let llm = OpenAILLM::new(
+        "https://api.openai.com/v1",
+        "your-api-key",
+        "gpt-4"
+    )?;
+    
+    // Process natural language input
+    let input = "Hi, I'm Jane Smith, 29 years old. My email is jane@example.com. I love hiking, coding, and playing piano.";
+    let json_result = llm.generate_json(&task, input)?;
+    
+    // Parse result back to struct
+    let person: PersonInfo = serde_json::from_str(&json_result)?;
+    println!("{:#?}", person);
+    
+    Ok(())
 }
 ```
 
 ## How It Works
 
-1. **Define Your Schema**: Create a Rust struct that represents the data structure you want to extract
-2. **Implement DataModel**: Provide instructions for each field using the `DataModel` trait
-3. **Create a Task**: Initialize a task with your schema and any additional instructions
-4. **Process Text**: Send natural language input to an LLM through the Secretary API
-5. **Get Structured Data**: Receive a JSON result that matches your defined schema
+1. **Define Your Schema**: Create a Rust struct with `#[derive(Task)]` and field-level instructions
+2. **Add Required Fields**: Include `context` and `additional_instructions` fields (marked with `#[serde(skip)]`)
+3. **Annotate Fields**: Use `#[task(instruction = "...")]` to guide the LLM on how to extract each field
+4. **Automatic Implementation**: The derive macro implements all necessary traits (data model, system prompt generation, context management)
+5. **Create Task Instance**: Initialize with `YourStruct::new(additional_instructions)`
+6. **Process Text**: Send natural language input to an LLM through the Secretary API
+7. **Get Structured Data**: Receive JSON that can be parsed back into your struct
 
-### The DataModel Trait
+### Field Instructions
 
-The `DataModel` trait is essential for guiding the LLM on how to populate your schema:
+The `#[task(instruction = "...")]` attribute tells the LLM how to extract each field:
 
 ```rust
-use secretary::traits::DataModel;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Task, Serialize, Deserialize, Debug, Default)]
 struct ProductInfo {
-    name: String,
-    category: String,
-    price_range: Option<String>,
-}
-
-impl DataModel for ProductInfo {
-    fn provide_data_model_instructions() -> Self {
-        Self {
-            name: "The product name as mentioned in the text".to_string(),
-            category: "Product category (electronics, clothing, etc.)".to_string(),
-            price_range: Some("Price range if mentioned (e.g., '$10-20')".to_string()),
-        }
-    }
+    #[serde(skip)]
+    pub context: secretary::MessageList,
+    #[serde(skip)]
+    pub additional_instructions: Vec<String>,
+    
+    #[task(instruction = "Extract the product name or title")]
+    pub name: String,
+    
+    #[task(instruction = "Extract price as a number without currency symbols")]
+    pub price: f64,
+    
+    #[task(instruction = "Categorize the product type (electronics, clothing, etc.)")]
+    pub category: String,
+    
+    #[task(instruction = "Extract brand name if mentioned, otherwise null")]
+    pub brand: Option<String>,
+    
+    #[task(instruction = "Determine if product is available (true/false)")]
+    pub in_stock: bool,
 }
 ```
 
 ## Advanced Features
 
-### Multi-Turn Conversations
-
-Secretary supports contextual, multi-turn conversations that build data progressively:
-
-```rust
-use secretary::{
-    llm_providers::openai::OpenAILLM,
-    tasks::basic_task::BasicTask,
-    traits::{Context, DataModel, GenerateJSON},
-    message_list::Role,
-};
-
-// Initialize your schema and task
-let mut task = BasicTask::new::<YourSchema>(instructions);
-
-// First user message
-task.push(Role::User, "I'm planning a trip to Japan next spring").unwrap();
-
-// Generate response based on context
-let response = llm.generate_json_with_context(&task).unwrap();
-
-// Add response to conversation context
-task.push(Role::Assistant, &response).unwrap();
-
-// Continue conversation
-task.push(Role::User, "I'll be there for about 10 days").unwrap();
-let response2 = llm.generate_json_with_context(&task).unwrap();
-```
-
-### Contextual Tasks with Reasoning
-
-For complex data gathering, use `ContextualTask` to maintain reasoning, notes, and follow-up questions:
-
-```rust
-use secretary::{
-    llm_providers::openai::OpenAILLM,
-    tasks::contextual_task::ContextualTask,
-    traits::{Context, DataModel, GenerateJSON},
-};
-
-// Create a contextual task for complex interactions
-let mut task = ContextualTask::new::<YourSchema>(
-    vec![
-        "Gather information progressively through conversation.".to_string(),
-        "Ask follow-up questions when information is incomplete.".to_string(),
-    ],
-);
-
-// Process user input
-task.push(Role::User, "I need help planning something").unwrap();
-let response = llm.generate_json_with_context(&task).unwrap();
-
-// The response includes reasoning, notes, and structured data
-// ContextualTask automatically manages reasoning and follow-up questions
-```
-
 ### Async Processing
 
-Secretary supports async operations for concurrent processing:
+Secretary provides full async support for concurrent processing:
 
 ```rust
-use secretary::{
-    llm_providers::openai::OpenAILLM,
-    tasks::basic_task::BasicTask,
-    traits::{AsyncGenerateJSON, DataModel},
-};
+use secretary::traits::AsyncGenerateJSON;
+use tokio;
 
 #[tokio::main]
-async fn main() {
-    let llm = OpenAILLM::new(/* ... */).unwrap();
-    let task = BasicTask::new::<YourSchema>(instructions);
+async fn main() -> anyhow::Result<()> {
+    let llm = OpenAILLM::new("https://api.openai.com/v1", "your-api-key", "gpt-4")?;
+    let task = PersonInfo::new(vec!["Extract accurately".to_string()]);
     
     // Process multiple inputs concurrently
-    let futures = inputs.into_iter().map(|input| {
-        let llm = Arc::clone(&llm);
-        let task = task.clone();
-        tokio::spawn(async move {
-            llm.async_generate_json(&task, &input).await
-        })
-    });
+    let inputs = vec![
+        "John Doe, 25, loves gaming",
+        "Alice Smith, 30, enjoys reading and cooking",
+        "Bob Johnson, 35, passionate about photography",
+    ];
+    
+    let futures: Vec<_> = inputs.into_iter().map(|input| {
+        let llm = &llm;
+        let task = &task;
+        async move {
+            llm.async_generate_json(task, input).await
+        }
+    }).collect();
     
     let results = futures::future::join_all(futures).await;
+    
+    for result in results {
+        match result {
+            Ok(json) => println!("Extracted: {}", json),
+            Err(e) => eprintln!("Error: {}", e),
+        }
+    }
+    
+    Ok(())
 }
+```
+
+### Context-Aware Conversations
+
+Maintain conversation state for multi-turn interactions:
+
+```rust
+use secretary::message_list::Role;
+
+fn main() -> anyhow::Result<()> {
+    let mut task = PersonInfo::new(vec!["Gather information progressively".to_string()]);
+    let llm = OpenAILLM::new("https://api.openai.com/v1", "your-api-key", "gpt-4")?;
+    
+    // First interaction
+    task.push(Role::User, "Hi, I'm John")?;
+    let response1 = llm.generate_json(&task, "")?;
+    task.push(Role::Assistant, &response1)?;
+    
+    // Continue conversation with context
+    task.push(Role::User, "I'm 25 years old and love programming")?;
+    let response2 = llm.generate_json(&task, "")?;
+    
+    println!("Final result: {}", response2);
+    Ok(())
+}
+```
+
+### System Prompt Generation
+
+The derive macro automatically generates comprehensive system prompts:
+
+```rust
+let task = PersonInfo::new(vec!["Be accurate".to_string()]);
+let prompt = task.get_system_prompt();
+println!("{}", prompt);
+
+// Output includes:
+// - JSON structure specification
+// - Field-specific instructions
+// - Additional instructions
+// - Formatting guidelines
 ```
 
 ## Examples
 
-The `examples/` directory contains comprehensive examples demonstrating different use cases:
+The `examples/` directory contains practical demonstrations:
 
 ### Basic Usage
-- **`generate_json.rs`** - Simple sentiment analysis with structured output
-- **`generate_json_with_context.rs`** - Multi-turn conversation with context preservation
+- **`derive_example.rs`** - Basic person information extraction
+- **`async_example.rs`** - Async product information extraction with comprehensive testing
 
-### Async Processing
-- **`async_generate_json.rs`** - Concurrent processing of multiple requests
-- **`async_generate_json_with_context.rs`** - Async multi-turn conversations
-
-### Contextual Tasks
-- **`contextual_prompt_basic.rs`** - Product analysis with reasoning and notes
-- **`contextual_prompt_conversation.rs`** - Interactive trip planning conversation
-- **`contextual_prompt_analysis.rs`** - Advanced contextual analysis patterns
-
-### Real-World Applications
-- **`product_review_analysis.rs`** - E-commerce review processing
-
-Run any example with:
+Run examples with:
 ```bash
-# Set environment variables first
-export SECRETARY_OPENAI_API_BASE="https://api.openai.com/v1"
-export SECRETARY_OPENAI_API_KEY="your-api-key"
-export SECRETARY_OPENAI_MODEL="gpt-4o-mini"
+# Basic example (no API key required for demo)
+cargo run --example derive_example
 
-# Run an example
-cargo run --example generate_json
+# Async example (no API key required for demo)
+cargo run --example async_example
+
+# To test with real API (uncomment API calls in examples):
+export OPENAI_API_KEY="your-api-key"
+cargo run --example async_example
 ```
-
-## Documentation
-
-- [Getting Started](./docs/GETTING_STARTED.md) - Complete setup guide
-- [Examples](./docs/EXAMPLES.md) - Practical code examples
-- [Project Structure](./docs/PROJECT_STRUCTURE.md) - Architecture overview
-- [API Documentation](https://docs.rs/secretary) - Detailed API reference
 
 ## Environment Setup
 
-Secretary requires the following environment variables for OpenAI integration:
+For production use with OpenAI:
 
 ```bash
-export SECRETARY_OPENAI_API_BASE="https://api.openai.com/v1"
-export SECRETARY_OPENAI_API_KEY="your-openai-api-key"
-export SECRETARY_OPENAI_MODEL="gpt-4o-mini"  # or gpt-4o, gpt-3.5-turbo, etc.
+export OPENAI_API_KEY="your-openai-api-key"
 ```
 
-These environment variables are used by the examples and can be referenced in your code as:
+In your code:
 ```rust
+let api_key = std::env::var("OPENAI_API_KEY")
+    .expect("OPENAI_API_KEY environment variable not set");
+
 let llm = OpenAILLM::new(
-    &std::env::var("SECRETARY_OPENAI_API_BASE").unwrap(),
-    &std::env::var("SECRETARY_OPENAI_API_KEY").unwrap(),
-    &std::env::var("SECRETARY_OPENAI_MODEL").unwrap(),
-).unwrap();
+    "https://api.openai.com/v1",
+    &api_key,
+    "gpt-4"
+)?;
 ```
 
-## License
+## API Reference
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+### Core Traits
+- `Task` - Main trait for data extraction, schema definition, and system prompt generation (auto-implemented by derive macro)
+- `GenerateJSON` - Synchronous LLM interaction
+- `AsyncGenerateJSON` - Asynchronous LLM interaction
+
+### LLM Providers
+- `OpenAILLM` - OpenAI API integration
+
+### Message Management
+- `MessageList` - Conversation context management
+- `Message` - Individual conversation messages
+- `Role` - Message roles (User, Assistant, System)
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development Setup
+
+1. Clone the repository
+2. Install Rust (latest stable)
+3. Run tests: `cargo test`
+4. Run examples: `cargo run --example async_example`
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
