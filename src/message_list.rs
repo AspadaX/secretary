@@ -82,7 +82,7 @@ impl From<Message> for ChatCompletionRequestMessage {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, PartialOrd, Ord, Eq, Default)]
 pub struct MessageList {
     messages: Vec<Message>,
 }
