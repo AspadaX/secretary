@@ -1,7 +1,6 @@
-use secretary::{Task, DataModel};
 use serde::{Serialize, Deserialize};
 use secretary::llm_providers::openai::OpenAILLM;
-use secretary::traits::GenerateJSON;
+use secretary::traits::{GenerateJSON, Task};
 
 /// Example data structure using the new Task derive macro
 #[derive(Task, Serialize, Deserialize, Debug, Default)]
@@ -39,11 +38,10 @@ fn main() -> anyhow::Result<()> {
     
     // Create LLM instance (you would use real API credentials)
     let llm = OpenAILLM::new(
-        "https://api.openai.com/v1",
-        "your-api-key",
-        "gpt-4"
-    )?;
-    
+        &std::env::var("SECRETARY_OPENAI_API_BASE").unwrap(),
+        &std::env::var("SECRETARY_OPENAI_API_KEY").unwrap(),
+        &std::env::var("SECRETARY_OPENAI_MODEL").unwrap(),
+    )?;    
     // Generate JSON using the task
     let result = llm.generate_json(&task, text)?;
     println!("Generated JSON: {}", result);

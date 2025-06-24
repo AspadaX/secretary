@@ -84,6 +84,11 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
                 Self::new(additional_instructions)
             }
             
+            fn provide_data_model_instructions() -> Self {
+                // This will be implemented by the user or use Default if available
+                Self::default()
+            }
+            
             fn get_system_prompt(&self) -> String {
                 let mut prompt = String::new();
                 prompt.push_str("This is the json structure that you should strictly follow:\n");
@@ -157,12 +162,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
             }
         }
         
-        impl ::secretary::traits::DataModel for #name {
-            fn provide_data_model_instructions() -> Self {
-                // This will be implemented by the user or use Default if available
-                Self::default()
-            }
-        }
+
         
         impl ::secretary::traits::ToJSON for #name {}
         impl ::secretary::traits::FromJSON for #name {}

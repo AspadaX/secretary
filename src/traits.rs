@@ -27,7 +27,12 @@ pub trait IsLLM {
     fn access_model(&self) -> &str;
 }
 
-pub trait DataModel: Serialize + Deserialize<'static> {
+/// The main Task trait that combines data model, system prompt, and context functionality.
+/// This trait should be implemented using the derive macro for user-defined structs.
+pub trait Task: Serialize + Deserialize<'static> + Default {
+    /// Create a new instance with additional instructions
+    fn new_with_instructions(additional_instructions: Vec<String>) -> Self;
+    
     /// Get the data model in JSON format with instructions specified.
     fn get_data_model_instructions() -> Value {
         serde_json::to_value(Self::provide_data_model_instructions()).expect("Failed to convert data model to JSON")
@@ -38,33 +43,53 @@ pub trait DataModel: Serialize + Deserialize<'static> {
     /// you need to implement in the DataModel trait.
     /// 
     /// ```rust
+    /// use secretary::traits::Task;
+    /// use secretary::message_list::MessageList;
+    /// use serde::{Serialize, Deserialize};
+    /// 
+    /// #[derive(Serialize, Deserialize, Default)]
     /// pub struct Example {
     ///     field: String,
     /// }
     /// 
-    /// impl DataModel for Example {
-    ///    fn get_data_model(&self) -> Self {
+    /// impl Task for Example {
+    ///    fn new_with_instructions(_instructions: Vec<String>) -> Self {
+    ///        Self::default()
+    ///    }
+    ///    
+    ///    fn provide_data_model_instructions() -> Self {
     ///        Example {
     ///           field: "Extract the field of the subject and put it here".to_string(),
     ///        }
+    ///    }
+    ///    
+    ///    fn get_system_prompt(&self) -> String {
+    ///        "Extract data".to_string()
+    ///    }
+    ///    
+    ///    fn push(&mut self, _role: secretary::message_list::Role, _content: &str) -> Result<(), anyhow::Error> {
+    ///        Ok(())
+    ///    }
+    ///    
+    ///    fn get_context_mut(&mut self) -> &mut MessageList {
+    ///        unimplemented!()
+    ///    }
+    ///    
+    ///    fn get_context(&self) -> MessageList {
+    ///        MessageList::new()
+    ///    }
+    ///    
+    ///    fn get_additional_instructions(&self) -> &Vec<String> {
+    ///        unimplemented!()
+    ///    }
+    ///    
+    ///    fn set_additional_instructions(&mut self, _instructions: Vec<String>) {
+    ///        unimplemented!()
     ///    }
     /// }
     /// 
     /// ```
     fn provide_data_model_instructions() -> Self;
-}
-
-/// Represent an object that has a system prompt
-pub trait SystemPrompt {
-    /// Get the system prompt
-    fn get_system_prompt(&self) -> String;
-}
-
-/// The main Task trait that combines SystemPrompt and Context functionality.
-/// This trait should be implemented using the derive macro for user-defined structs.
-pub trait Task: DataModel + Default {
-    /// Create a new instance with additional instructions
-    fn new_with_instructions(additional_instructions: Vec<String>) -> Self;
     
     /// Get the system prompt (combines SystemPrompt functionality)
     fn get_system_prompt(&self) -> String;
@@ -224,22 +249,55 @@ where
     ///
     /// # Example
     ///
-    /// ```
-    /// use secretary::{openai::OpenAILLM, tasks::basic_task::BasicTask, traits::AsyncGenerateJSON};
+    /// ```no_run
+    /// use secretary::llm_providers::openai::OpenAILLM;
+    /// use secretary::traits::{AsyncGenerateJSON, Task};
+    /// use secretary::message_list::{MessageList, Role};
     /// use serde::{Deserialize, Serialize};
     ///
-    /// #[derive(Debug, Serialize, Deserialize)]
+    /// #[derive(Debug, Serialize, Deserialize, Default)]
     /// struct MyData {
     ///     field: String,
+    /// }
+    ///
+    /// impl Task for MyData {
+    ///     fn new_with_instructions(_instructions: Vec<String>) -> Self {
+    ///         Self::default()
+    ///     }
+    ///     
+    ///     fn provide_data_model_instructions() -> Self {
+    ///         MyData { field: "Description for field".to_string() }
+    ///     }
+    ///     
+    ///     fn get_system_prompt(&self) -> String {
+    ///         "Extract data".to_string()
+    ///     }
+    ///     
+    ///     fn push(&mut self, _role: Role, _content: &str) -> Result<(), anyhow::Error> {
+    ///         Ok(())
+    ///     }
+    ///     
+    ///     fn get_context_mut(&mut self) -> &mut MessageList {
+    ///         unimplemented!()
+    ///     }
+    ///     
+    ///     fn get_context(&self) -> MessageList {
+    ///         MessageList::new()
+    ///     }
+    ///     
+    ///     fn get_additional_instructions(&self) -> &Vec<String> {
+    ///         unimplemented!()
+    ///     }
+    ///     
+    ///     fn set_additional_instructions(&mut self, _instructions: Vec<String>) {
+    ///         unimplemented!()
+    ///     }
     /// }
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
     ///     let llm = OpenAILLM::new("api_base", "api_key", "model")?;
-    ///     let task = BasicTask::new(
-    ///         MyData { field: "Description for field".to_string() },
-    ///         vec!["Extract data from the text".to_string()],
-    ///     );
+    ///     let task = MyData::default();
     ///     
     ///     let result = llm.async_generate_json(&task, "Some text with info").await?;
     ///     println!("{}", result);
@@ -301,27 +359,55 @@ where
     ///
     /// # Example
     ///
-    /// ```
-    /// use secretary::{
-    ///     message_list::Role,
-    ///     openai::OpenAILLM,
-    ///     tasks::basic_task::BasicTask,
-    ///     traits::{AsyncGenerateJSON, Context},
-    /// };
+    /// ```no_run
+    /// use secretary::llm_providers::openai::OpenAILLM;
+    /// use secretary::traits::{AsyncGenerateJSON, Task};
+    /// use secretary::message_list::{MessageList, Role};
     /// use serde::{Deserialize, Serialize};
     ///
-    /// #[derive(Debug, Serialize, Deserialize)]
+    /// #[derive(Debug, Serialize, Deserialize, Default)]
     /// struct MyData {
     ///     field: String,
+    /// }
+    ///
+    /// impl Task for MyData {
+    ///     fn new_with_instructions(_instructions: Vec<String>) -> Self {
+    ///         Self::default()
+    ///     }
+    ///     
+    ///     fn provide_data_model_instructions() -> Self {
+    ///         MyData { field: "Description for field".to_string() }
+    ///     }
+    ///     
+    ///     fn get_system_prompt(&self) -> String {
+    ///         "Extract data".to_string()
+    ///     }
+    ///     
+    ///     fn push(&mut self, _role: Role, _content: &str) -> Result<(), anyhow::Error> {
+    ///         Ok(())
+    ///     }
+    ///     
+    ///     fn get_context_mut(&mut self) -> &mut MessageList {
+    ///         unimplemented!()
+    ///     }
+    ///     
+    ///     fn get_context(&self) -> MessageList {
+    ///         MessageList::new()
+    ///     }
+    ///     
+    ///     fn get_additional_instructions(&self) -> &Vec<String> {
+    ///         unimplemented!()
+    ///     }
+    ///     
+    ///     fn set_additional_instructions(&mut self, _instructions: Vec<String>) {
+    ///         unimplemented!()
+    ///     }
     /// }
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
     ///     let llm = OpenAILLM::new("api_base", "api_key", "model")?;
-    ///     let mut task = BasicTask::new(
-    ///         MyData { field: "Description for field".to_string() },
-    ///         vec!["Extract data from the text".to_string()],
-    ///     );
+    ///     let mut task = MyData::default();
     ///     
     ///     // Add messages to the conversation context
     ///     task.push(Role::User, "Here's my first message")?;

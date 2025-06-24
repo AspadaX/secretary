@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "secretary"
-version = "0.2.40"
+version = "0.3.10"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -1088,7 +1088,7 @@ dependencies = [
 
 [[package]]
 name = "secretary-derive"
-version = "0.2.40"
+version = "0.3.10"
 dependencies = [
  "proc-macro2",
  "quote",

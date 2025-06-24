@@ -113,6 +113,14 @@ impl MessageList {
     pub fn iter(&self) -> std::slice::Iter<'_, Message> {
         self.messages.iter()
     }
+    
+    pub fn len(&self) -> usize {
+        self.messages.len()
+    }
+    
+    pub fn is_empty(&self) -> bool {
+        self.messages.is_empty()
+    }
 }
 
 impl IntoIterator for MessageList {
