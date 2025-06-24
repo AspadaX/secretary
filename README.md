@@ -244,31 +244,9 @@ let llm = OpenAILLM::new(
 )?;
 ```
 
-## API Reference
-
-### Core Traits
-- `Task` - Main trait for data extraction, schema definition, and system prompt generation (auto-implemented by derive macro)
-- `GenerateJSON` - Synchronous LLM interaction
-- `AsyncGenerateJSON` - Asynchronous LLM interaction
-
-### LLM Providers
-- `OpenAILLM` - OpenAI API integration
-
-### Message Management
-- `MessageList` - Conversation context management
-- `Message` - Individual conversation messages
-- `Role` - Message roles (User, Assistant, System)
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-
-### Development Setup
-
-1. Clone the repository
-2. Install Rust (latest stable)
-3. Run tests: `cargo test`
-4. Run examples: `cargo run --example async_example`
 
 ## License
 
