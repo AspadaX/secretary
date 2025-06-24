@@ -29,7 +29,7 @@ pub trait IsLLM {
 
 /// The main Task trait that combines data model, system prompt, and context functionality.
 /// This trait should be implemented using the derive macro for user-defined structs.
-pub trait Task: Serialize + Deserialize<'static> + Default {
+pub trait Task: Serialize + for <'de> Deserialize<'de> + Default {
     /// Create a new instance with additional instructions
     fn new_with_instructions(additional_instructions: Vec<String>) -> Self;
     
@@ -138,7 +138,7 @@ pub trait Context {
     fn get_context(&self) -> MessageList;
 }
 
-pub trait GenerateJSON
+pub trait GenerateData
 where
     Self: IsLLM,
 {
@@ -152,8 +152,8 @@ where
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_json(&self, task: &impl Task, target: &str) -> Result<String, Error> {
-        let runtime = tokio::runtime::Runtime::new()?;
+    fn generate_data<T: Task>(&self, task: &T, target: &str) -> Result<T, Error> {
+        let runtime: Runtime = tokio::runtime::Runtime::new()?;
         let result: String = runtime.block_on(async {
             let request = CreateChatCompletionRequestArgs::default()
                 .model(&self.access_model().to_string())
@@ -189,8 +189,8 @@ where
 
             return Err(anyhow!("No response is retrieved from the LLM"));
         })?;
-
-        Ok(result)
+        
+        Ok(serde_json::from_str(&result)?)
     }
     
     /// Generates JSON response from the LLM based on the provided context.
@@ -202,7 +202,7 @@ where
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_json_with_context(&self, task: &impl Task) -> Result<String, Error> {
+    fn generate_data_with_context<T: Task>(&self, task: &T) -> Result<T, Error> {
         let runtime: Runtime = tokio::runtime::Runtime::new()?;
         let result: String = runtime.block_on(async {
             let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
@@ -226,11 +226,11 @@ where
             return Err(anyhow!("No response is retrieved from the LLM"));
         })?;
 
-        Ok(result)
+        Ok(serde_json::from_str(&result)?)
     }
 }
 
-pub trait AsyncGenerateJSON
+pub trait AsyncGenerateData
 where
     Self: IsLLM,
 {
@@ -304,11 +304,11 @@ where
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_json(
+    async fn async_generate_data<T: Task>(
         &self,
-        task: &impl Task,
+        task: &T,
         target: &str,
-    ) -> Result<String, Error> {
+    ) -> Result<T, Error> {
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
             .response_format(ResponseFormat::JsonObject)
@@ -338,7 +338,7 @@ where
             };
 
         if let Some(content) = response.choices[0].clone().message.content {
-            return Ok(content);
+            return Ok(serde_json::from_str(&content)?);
         }
 
         return Err(anyhow!("No response is retrieved from the LLM"));
@@ -418,7 +418,7 @@ where
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_json_with_context(&self, task: &impl Task) -> Result<String, Error>
+    async fn async_generate_data_with_context<T: Task>(&self, task: &T) -> Result<T, Error>
     {
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
@@ -435,7 +435,7 @@ where
             };
 
         if let Some(content) = response.choices[0].clone().message.content {
-            return Ok(content);
+            return Ok(serde_json::from_str(&content)?);
         }
 
         return Err(anyhow!("No response is retrieved from the LLM"));

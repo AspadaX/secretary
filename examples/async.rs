@@ -1,7 +1,5 @@
-use std::result;
-
 use serde::{Serialize, Deserialize};
-use secretary::{llm_providers::openai::OpenAILLM, traits::Task, AsyncGenerateJSON};
+use secretary::{llm_providers::openai::OpenAILLM, traits::Task, AsyncGenerateData};
 use tokio;
 
 /// Example data structure for extracting product information
@@ -86,12 +84,8 @@ async fn main() -> anyhow::Result<()> {
     )?;
     
     println!("Making async request to LLM...");
-    let result = llm.async_generate_json(&task, product_text).await?;
-    println!("Generated JSON: {}", result);
-    
-    // Parse the result back into our struct
-    let extracted: ProductExtraction = serde_json::from_str(&result)?;
-    println!("Extracted Product: {:#?}", extracted);
+    let result: ProductExtraction = llm.async_generate_data(&task, product_text).await?;
+    println!("Generated Data Structure: {:#?}", result);
     
     println!();
     println!("Example completed successfully!");

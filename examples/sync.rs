@@ -1,6 +1,6 @@
 use serde::{Serialize, Deserialize};
 use secretary::llm_providers::openai::OpenAILLM;
-use secretary::traits::{GenerateJSON, Task};
+use secretary::traits::{GenerateData, Task};
 
 /// Example data structure using the new Task derive macro
 #[derive(Task, Serialize, Deserialize, Debug, Default)]
@@ -41,14 +41,11 @@ fn main() -> anyhow::Result<()> {
         &std::env::var("SECRETARY_OPENAI_API_BASE").unwrap(),
         &std::env::var("SECRETARY_OPENAI_API_KEY").unwrap(),
         &std::env::var("SECRETARY_OPENAI_MODEL").unwrap(),
-    )?;    
-    // Generate JSON using the task
-    let result = llm.generate_json(&task, text)?;
-    println!("Generated JSON: {}", result);
+    )?;
     
-    // Parse the result back to the struct
-    let parsed: PersonExtraction = serde_json::from_str(&result)?;
-    println!("Parsed result: {:?}", parsed);
+    // Generate JSON using the task
+    let result: PersonExtraction = llm.generate_data(&task, text)?;
+    println!("Generated JSON: {:#?}", result);
     
     Ok(())
 }

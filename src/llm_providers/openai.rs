@@ -2,7 +2,7 @@ use anyhow::{Error, Result};
 use async_openai::Client;
 use async_openai::config::OpenAIConfig;
 
-use crate::traits::{AsyncGenerateJSON, GenerateJSON, IsLLM};
+use crate::traits::{AsyncGenerateData, GenerateData, IsLLM};
 
 /// Represents a Large Language Model (LLM) that is compatible with OpenAI API.
 /// An LLM is the primary tool we use to convert unstructured data into structured data.
@@ -47,6 +47,6 @@ impl IsLLM for OpenAILLM {
     }
 }
 
-impl GenerateJSON for OpenAILLM {}
+impl GenerateData for OpenAILLM {}
 
-impl AsyncGenerateJSON for OpenAILLM {}
+impl AsyncGenerateData for OpenAILLM {}
