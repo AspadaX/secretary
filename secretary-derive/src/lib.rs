@@ -3,7 +3,6 @@ use quote::quote;
 use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
 /// Derive macro that implements the Task trait for a struct.
-/// This combines the functionality of SystemPrompt and Context traits,
 /// allowing users to directly use their data structures with LLM generation.
 ///
 /// # Example
@@ -22,8 +21,8 @@ use syn::{Data, DeriveInput, Fields, parse_macro_input};
 /// ```
 #[proc_macro_derive(Task, attributes(task))]
 pub fn derive_task(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let name = &input.ident;
+    let input: DeriveInput = parse_macro_input!(input as DeriveInput);
+    let name: &syn::Ident = &input.ident;
 
     // Extract field information for generating instructions
     let fields = match &input.data {
@@ -79,22 +78,16 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let expanded = quote! {
+    let expanded: proc_macro2::TokenStream = quote! {
         impl #name {
             /// Create a new instance with additional instructions
-            pub fn new(additional_instructions: Vec<String>) -> Self {
+            pub fn new() -> Self {
                 let mut instance = Self::default();
-                instance.additional_instructions = additional_instructions;
-                instance.context = ::secretary::message_list::MessageList::new();
                 instance
             }
         }
 
         impl ::secretary::traits::Task for #name {
-            fn new_with_instructions(additional_instructions: Vec<String>) -> Self {
-                Self::new(additional_instructions)
-            }
-
             fn provide_data_model_instructions() -> Self {
                 // This will be implemented by the user or use Default if available
                 Self::default()
@@ -119,57 +112,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
                     prompt.push_str(&format!("- {}: {}\n", field, instruction));
                 }
 
-                // Add additional instructions
-                if !self.get_additional_instructions().is_empty() {
-                    prompt.push_str("\nAdditional instructions:\n");
-                    for instruction in self.get_additional_instructions() {
-                        prompt.push_str(&format!("- {}\n", instruction));
-                    }
-                }
-
                 prompt
-            }
-
-            fn push(&mut self, role: ::secretary::message_list::Role, content: &str) -> Result<(), ::anyhow::Error> {
-                use ::anyhow::anyhow;
-                match role {
-                    ::secretary::message_list::Role::User => {
-                        self.get_context_mut()
-                            .push(::secretary::message_list::Message::new(::secretary::message_list::Role::User, content.to_string()));
-                    }
-                    ::secretary::message_list::Role::Assistant => {
-                        self.get_context_mut()
-                            .push(::secretary::message_list::Message::new(::secretary::message_list::Role::Assistant, content.to_string()));
-                    }
-                    ::secretary::message_list::Role::System => {
-                        self.get_context_mut()
-                            .push(::secretary::message_list::Message::new(::secretary::message_list::Role::System, content.to_string()));
-                    }
-                }
-                Ok(())
-            }
-
-            fn get_context_mut(&mut self) -> &mut ::secretary::message_list::MessageList {
-                &mut self.context
-            }
-
-            fn get_context(&self) -> ::secretary::message_list::MessageList {
-                let mut final_context = ::secretary::message_list::MessageList::new();
-                final_context.push(::secretary::message_list::Message::new(
-                    ::secretary::message_list::Role::System,
-                    self.get_system_prompt(),
-                ));
-
-                final_context.extend(self.context.clone());
-                final_context
-            }
-
-            fn get_additional_instructions(&self) -> &Vec<String> {
-                &self.additional_instructions
-            }
-
-            fn set_additional_instructions(&mut self, instructions: Vec<String>) {
-                self.additional_instructions = instructions;
             }
         }
 

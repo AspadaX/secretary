@@ -13,8 +13,6 @@ use async_openai::{
 };
 use tokio::runtime::Runtime;
 
-use crate::message_list::{Message, MessageList, Role};
-
 // Re-export the derive macro
 pub use secretary_derive::Task;
 
@@ -30,9 +28,6 @@ pub trait IsLLM {
 /// The main Task trait that combines data model, system prompt, and context functionality.
 /// This trait should be implemented using the derive macro for user-defined structs.
 pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
-    /// Create a new instance with additional instructions
-    fn new_with_instructions(additional_instructions: Vec<String>) -> Self;
-
     /// Get the data model in JSON format with instructions specified.
     fn get_data_model_instructions() -> Value {
         serde_json::to_value(Self::provide_data_model_instructions())
@@ -54,10 +49,6 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
     /// }
     ///
     /// impl Task for Example {
-    ///    fn new_with_instructions(_instructions: Vec<String>) -> Self {
-    ///        Self::default()
-    ///    }
-    ///    
     ///    fn provide_data_model_instructions() -> Self {
     ///        Example {
     ///           field: "Extract the field of the subject and put it here".to_string(),
@@ -67,26 +58,6 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
     ///    fn get_system_prompt(&self) -> String {
     ///        "Extract data".to_string()
     ///    }
-    ///    
-    ///    fn push(&mut self, _role: secretary::message_list::Role, _content: &str) -> Result<(), anyhow::Error> {
-    ///        Ok(())
-    ///    }
-    ///    
-    ///    fn get_context_mut(&mut self) -> &mut MessageList {
-    ///        unimplemented!()
-    ///    }
-    ///    
-    ///    fn get_context(&self) -> MessageList {
-    ///        MessageList::new()
-    ///    }
-    ///    
-    ///    fn get_additional_instructions(&self) -> &Vec<String> {
-    ///        unimplemented!()
-    ///    }
-    ///    
-    ///    fn set_additional_instructions(&mut self, _instructions: Vec<String>) {
-    ///        unimplemented!()
-    ///    }
     /// }
     ///
     /// ```
@@ -94,49 +65,6 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
 
     /// Get the system prompt (combines SystemPrompt functionality)
     fn get_system_prompt(&self) -> String;
-
-    /// Update the context (from Context trait)
-    fn push(&mut self, role: Role, content: &str) -> Result<(), Error>;
-
-    /// Get access right to read and write the context
-    fn get_context_mut(&mut self) -> &mut MessageList;
-
-    /// Get a copy of the context
-    fn get_context(&self) -> MessageList;
-
-    /// Get additional instructions
-    fn get_additional_instructions(&self) -> &Vec<String>;
-
-    /// Set additional instructions
-    fn set_additional_instructions(&mut self, instructions: Vec<String>);
-}
-
-/// Implement this for context management (kept for backward compatibility)
-pub trait Context {
-    /// Update the context
-    fn push(&mut self, role: Role, content: &str) -> Result<(), Error> {
-        match role {
-            Role::User => self
-                .get_context_mut()
-                .push(Message::new(Role::User, content.to_string())),
-            Role::Assistant => {
-                self.get_context_mut()
-                    .push(Message::new(Role::Assistant, content.to_string()));
-            }
-            Role::System => {
-                self.get_context_mut()
-                    .push(Message::new(Role::System, content.to_string()));
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Get access right to read and write the context
-    fn get_context_mut(&mut self) -> &mut MessageList;
-
-    /// Get a copy of the context
-    fn get_context(&self) -> MessageList;
 }
 
 pub trait GenerateData
@@ -153,7 +81,8 @@ where
     /// # Returns
     ///
     /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_data<T: Task>(&self, task: &T, target: &str) -> Result<T, Error> {
+    fn generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Error> {
+        let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let runtime: Runtime = tokio::runtime::Runtime::new()?;
         let result: String = runtime.block_on(async {
             let request = CreateChatCompletionRequestArgs::default()
@@ -165,6 +94,7 @@ where
                             ChatCompletionRequestMessageContentPartTextArgs::default()
                                 .text(
                                     task.get_system_prompt()
+                                        + &formatted_additional_instructions
                                         + "\nThis is the basis for generating a json:\n"
                                         + target,
                                 )
@@ -174,42 +104,6 @@ where
                         .build()?
                         .into(),
                 ])
-                .build()?;
-
-            let response: CreateChatCompletionResponse =
-                match self.access_client().chat().create(request.clone()).await {
-                    std::result::Result::Ok(response) => response,
-                    Err(e) => {
-                        anyhow::bail!("Failed to execute function: {}", e);
-                    }
-                };
-
-            if let Some(content) = response.choices[0].clone().message.content {
-                return Ok(content);
-            }
-
-            return Err(anyhow!("No response is retrieved from the LLM"));
-        })?;
-
-        Ok(serde_json::from_str(&result)?)
-    }
-
-    /// Generates JSON response from the LLM based on the provided context.
-    ///
-    /// # Arguments
-    ///
-    /// * `task` - A Task implementation that provides both system prompt and context.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_data_with_context<T: Task>(&self, task: &T) -> Result<T, Error> {
-        let runtime: Runtime = tokio::runtime::Runtime::new()?;
-        let result: String = runtime.block_on(async {
-            let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
-                .model(&self.access_model().to_string())
-                .response_format(ResponseFormat::JsonObject)
-                .messages(task.get_context())
                 .build()?;
 
             let response: CreateChatCompletionResponse =
@@ -257,11 +151,6 @@ where
     ///
     /// #[derive(Task, Debug, Serialize, Deserialize, Default)]
     /// struct MyData {
-    ///     #[serde(skip)]
-    ///     pub context: secretary::MessageList,
-    ///     #[serde(skip)]
-    ///     pub additional_instructions: Vec<String>,
-    ///     
     ///     #[task(instruction = "Extract the field value")]
     ///     field: String,
     /// }
@@ -276,7 +165,8 @@ where
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_data<T: Task>(&self, task: &T, target: &str) -> Result<T, Error> {
+    async fn async_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Error> {
+        let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
             .response_format(ResponseFormat::JsonObject)
@@ -286,6 +176,7 @@ where
                         ChatCompletionRequestMessageContentPartTextArgs::default()
                             .text(
                                 task.get_system_prompt()
+                                    + &formatted_additional_instructions
                                     + "\nThis is the basis for generating a json:\n"
                                     + target,
                             )
@@ -295,74 +186,6 @@ where
                     .build()?
                     .into(),
             ])
-            .build()?;
-
-        let response: CreateChatCompletionResponse =
-            match self.access_client().chat().create(request.clone()).await {
-                std::result::Result::Ok(response) => response,
-                Err(e) => {
-                    anyhow::bail!("Failed to execute function: {}", e);
-                }
-            };
-
-        if let Some(content) = response.choices[0].clone().message.content {
-            return Ok(serde_json::from_str(&content)?);
-        }
-
-        return Err(anyhow!("No response is retrieved from the LLM"));
-    }
-
-    /// Asynchronously generates JSON response from the LLM based on the provided context.
-    ///
-    /// This is the asynchronous version of `generate_json_with_context` that enables
-    /// context-aware conversations in async contexts.
-    ///
-    /// # Arguments
-    ///
-    /// * `task` - A Task implementation that provides both the schema definition and conversation history.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    ///
-    /// # Example
-    ///
-    /// ```no_run
-    /// use secretary::llm_providers::openai::OpenAILLM;
-    /// use secretary::traits::{AsyncGenerateData, Task};
-    /// use secretary::message_list::Role;
-    /// use serde::{Deserialize, Serialize};
-    ///
-    /// #[derive(Task, Debug, Serialize, Deserialize, Default)]
-    /// struct MyData {
-    ///     #[serde(skip)]
-    ///     pub context: secretary::MessageList,
-    ///     #[serde(skip)]
-    ///     pub additional_instructions: Vec<String>,
-    ///     
-    ///     #[task(instruction = "Extract the field value")]
-    ///     field: String,
-    /// }
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> anyhow::Result<()> {
-    ///     let llm = OpenAILLM::new("api_base", "api_key", "model")?;
-    ///     let mut task = MyData::new(vec![]);
-    ///     
-    ///     // Add messages to the conversation context
-    ///     task.push(Role::User, "Here's my first message")?;
-    ///     
-    ///     // Generate response with context
-    ///     let result: MyData = llm.async_generate_data_with_context(&task).await?;
-    ///     println!("{:#?}", result);
-    ///     Ok(())
-    /// }
-    /// ```
-    async fn async_generate_data_with_context<T: Task>(&self, task: &T) -> Result<T, Error> {
-        let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
-            .model(&self.access_model().to_string())
-            .response_format(ResponseFormat::JsonObject)
-            .messages(task.get_context())
             .build()?;
 
         let response: CreateChatCompletionResponse =
@@ -460,4 +283,17 @@ pub trait FromJSON {
     {
         Ok(serde_json::from_str(json)?)
     }
+}
+
+fn format_additional_instructions(additional_instructions: &Vec<String>) -> String {
+    let mut prompt: String = String::new();
+    // Add additional instructions
+    if !additional_instructions.is_empty() {
+        prompt.push_str("\nAdditional instructions:\n");
+        for instruction in additional_instructions {
+            prompt.push_str(&format!("- {}\n", instruction));
+        }
+    }
+    
+    prompt
 }
