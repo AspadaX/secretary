@@ -38,7 +38,7 @@ struct ResearchPaperExtraction {
 /// This example shows how to use async_force_generate_data for models like o1 and deepseek
 /// that don't have built-in JSON mode support but can still generate structured data
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Secretary Async Force Example - Research Paper Extraction");
     println!("{}", "=".repeat(65));
     println!("This example demonstrates force JSON parsing for reasoning models");
