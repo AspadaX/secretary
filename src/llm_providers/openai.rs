@@ -1,4 +1,3 @@
-use anyhow::{Error, Result};
 use async_openai::Client;
 use async_openai::config::OpenAIConfig;
 
@@ -23,8 +22,8 @@ impl OpenAILLM {
     ///
     /// # Returns
     ///
-    /// * `Result<Self, Error>` - On success, returns an instance of the LLM struct. On failure, returns an Error.
-    pub fn new(api_base: &str, api_key: &str, model: &str) -> Result<Self, Error> {
+    /// * `Result<Self, Box<dyn std::error::Error>>` - On success, returns an instance of the LLM struct. On failure, returns an Box<dyn std::error::Error>.
+    pub fn new(api_base: &str, api_key: &str, model: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let llm_configuration: OpenAIConfig = OpenAIConfig::default()
             .with_api_key(api_key)
             .with_api_base(api_base);

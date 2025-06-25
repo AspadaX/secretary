@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use anyhow::{Error, Result, anyhow};
 use async_openai::{
     Client,
     config::Config,
@@ -15,6 +14,8 @@ use tokio::runtime::Runtime;
 
 // Re-export the derive macro
 pub use secretary_derive::Task;
+
+use crate::SecretaryError;
 
 /// Implement this for various LLM API standards
 pub trait IsLLM {
@@ -79,12 +80,12 @@ where
     ///
     /// # Returns
     ///
-    /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
-    fn generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Error> {
+    /// * `Result<String, Box<dyn std::error::Error>>` - A result containing the JSON response as a string or an Box<dyn std::error::Error>.
+    fn generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error>> {
         let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let runtime: Runtime = tokio::runtime::Runtime::new()?;
         let result: String = runtime.block_on(async {
-            let request = CreateChatCompletionRequestArgs::default()
+            let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
                 .model(&self.access_model().to_string())
                 .response_format(ResponseFormat::JsonObject)
                 .messages(vec![
@@ -97,27 +98,26 @@ where
                                         + "\nThis is the basis for generating a json:\n"
                                         + target,
                                 )
-                                .build()?
+                                .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?
                                 .into(),
                         ])
-                        .build()?
+                        .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?
                         .into(),
                 ])
-                .build()?;
+                .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
 
-            let response: CreateChatCompletionResponse =
-                match self.access_client().chat().create(request.clone()).await {
-                    std::result::Result::Ok(response) => response,
-                    Err(e) => {
-                        anyhow::bail!("Failed to execute function: {}", e);
-                    }
-                };
+            let response: CreateChatCompletionResponse = self
+                .access_client()
+                .chat()
+                .create(request.clone())
+                .await
+                .map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
 
             if let Some(content) = response.choices[0].clone().message.content {
                 return Ok(content);
             }
 
-            return Err(anyhow!("No response is retrieved from the LLM"));
+            return Err(SecretaryError::NoLLMResponse);
         })?;
 
         Ok(serde_json::from_str(&result)?)
@@ -139,7 +139,7 @@ where
     ///
     /// # Returns
     ///
-    /// * `Result<String, Error>` - A result containing the JSON response as a string or an error.
+    /// * `Result<String, Box<dyn std::error::Error>>` - A result containing the JSON response as a string or an Box<dyn std::error::Error>.
     ///
     /// # Example
     ///
@@ -164,7 +164,7 @@ where
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Error> {
+    async fn async_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error>> {
         let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
@@ -188,18 +188,17 @@ where
             .build()?;
 
         let response: CreateChatCompletionResponse =
-            match self.access_client().chat().create(request.clone()).await {
-                std::result::Result::Ok(response) => response,
-                Err(e) => {
-                    anyhow::bail!("Failed to execute function: {}", e);
-                }
-            };
+            self.access_client()
+                .chat()
+                .create(request.clone())
+                .await
+                .map_err(|e| format!("Failed to execute function: {}", e))?;
 
         if let Some(content) = response.choices[0].clone().message.content {
             return Ok(serde_json::from_str(&content)?);
         }
 
-        return Err(anyhow!("No response is retrieved from the LLM"));
+        return Err(SecretaryError::NoLLMResponse.into());
     }
 }
 
@@ -242,7 +241,7 @@ pub trait ToJSON
 where
     Self: serde::Serialize + Sized,
 {
-    fn to_json(&self) -> Result<String, Error> {
+    fn to_json(&self) -> Result<String, Box<dyn std::error::Error>> {
         Ok(serde_json::to_string(self)?)
     }
 }
@@ -276,7 +275,7 @@ where
 /// }
 /// ```
 pub trait FromJSON {
-    fn from_json(json: &str) -> Result<Self, Error>
+    fn from_json(json: &str) -> Result<Self, Box<dyn std::error::Error>>
     where
         Self: for<'de> serde::Deserialize<'de> + Sized,
     {
