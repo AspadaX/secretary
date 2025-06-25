@@ -40,7 +40,6 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
     ///
     /// ```rust
     /// use secretary::traits::Task;
-    /// use secretary::message_list::MessageList;
     /// use serde::{Serialize, Deserialize};
     ///
     /// #[derive(Serialize, Deserialize, Default)]

@@ -1,16 +1,11 @@
-use secretary::{AsyncGenerateData, llm_providers::openai::OpenAILLM, traits::Task};
+use secretary::traits::{AsyncGenerateData, Task};
+use secretary::llm_providers::openai::OpenAILLM;
 use serde::{Deserialize, Serialize};
 use tokio;
 
 /// Example data structure for extracting product information
 #[derive(Task, Serialize, Deserialize, Debug, Default)]
 struct ProductExtraction {
-    /// Required fields for Task trait
-    #[serde(skip)]
-    pub context: secretary::MessageList,
-    #[serde(skip)]
-    pub additional_instructions: Vec<String>,
-
     /// Product data fields with specific extraction instructions
     #[task(instruction = "Extract the product name or title")]
     pub name: String,
@@ -37,12 +32,15 @@ async fn main() -> anyhow::Result<()> {
     println!("Secretary Async Example - Product Information Extraction");
     println!("{}", "=".repeat(60));
 
-    // Create a task instance with additional instructions
-    let mut task = ProductExtraction::new(vec![
+    // Create a task instance
+    let task = ProductExtraction::new();
+
+    // Additional instructions for the LLM
+    let additional_instructions = vec![
         "Be precise with numerical values".to_string(),
         "Use 'Unknown' for missing information".to_string(),
         "Ensure boolean values are accurate".to_string(),
-    ]);
+    ];
 
     // Example product description text
     let product_text = "
@@ -66,19 +64,6 @@ async fn main() -> anyhow::Result<()> {
     println!("{}", task.get_system_prompt());
     println!();
 
-    // Demonstrate context management
-    task.push(
-        secretary::message_list::Role::User,
-        "Please extract product information from the following text",
-    )?;
-    task.push(
-        secretary::message_list::Role::Assistant,
-        "I'll help you extract the product information accurately.",
-    )?;
-
-    println!("Context messages: {}", task.get_context().len());
-    println!();
-
     // Note: This would require actual API credentials to work
     // For demonstration, we'll show how to set up the async call
     println!("Setting up async LLM call (requires API credentials):");
@@ -90,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
     )?;
 
     println!("Making async request to LLM...");
-    let result: ProductExtraction = llm.async_generate_data(&task, product_text).await?;
+    let result: ProductExtraction = llm.async_generate_data(&task, product_text, &additional_instructions).await?;
     println!("Generated Data Structure: {:#?}", result);
 
     println!();
@@ -105,9 +90,14 @@ mod tests {
 
     #[test]
     fn test_task_creation() {
-        let task = ProductExtraction::new(vec!["test instruction".to_string()]);
-        assert_eq!(task.get_additional_instructions().len(), 1);
-        assert_eq!(task.get_additional_instructions()[0], "test instruction");
+        let task = ProductExtraction::new();
+        // Task should be created successfully with default values
+        assert_eq!(task.name, "");
+        assert_eq!(task.price, 0.0);
+        assert_eq!(task.category, "");
+        assert_eq!(task.brand, None);
+        assert_eq!(task.description, "");
+        assert_eq!(task.in_stock, false);
     }
 
     #[test]
@@ -124,26 +114,24 @@ mod tests {
     }
 
     #[test]
-    fn test_context_management() {
-        let mut task = ProductExtraction::new(vec![]);
-
-        // Test adding messages to context
-        task.push(secretary::message_list::Role::User, "Test message")
-            .unwrap();
-        let context = task.get_context();
-
-        // Should have system message + user message
-        assert!(context.len() >= 2);
+    fn test_data_model_instructions() {
+        let task = ProductExtraction::new();
+        let data_model = ProductExtraction::provide_data_model_instructions();
+        
+        // Should provide a default instance for instructions
+        assert_eq!(data_model.name, "");
+        assert_eq!(data_model.price, 0.0);
     }
 
     #[tokio::test]
     async fn test_async_compatibility() {
         // Test that our struct works in async context
-        let task = ProductExtraction::new(vec!["async test".to_string()]);
+        let task = ProductExtraction::new();
 
         // Simulate async operation
         tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
 
-        assert_eq!(task.get_additional_instructions()[0], "async test");
+        // Task should work in async context
+        assert_eq!(task.name, "");
     }
 }

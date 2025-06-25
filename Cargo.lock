@@ -103,9 +103,9 @@ checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
 
 [[package]]
 name = "bumpalo"
-version = "3.18.1"
+version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "793db76d6187cd04dff33004d8e6c9cc4e05cd330500379d2394209271b4aeee"
+checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
 
 [[package]]
 name = "bytes"
@@ -1076,7 +1076,7 @@ dependencies = [
 
 [[package]]
 name = "secretary"
-version = "0.3.20"
+version = "0.3.30"
 dependencies = [
  "anyhow",
  "async-openai",
@@ -1088,7 +1088,7 @@ dependencies = [
 
 [[package]]
 name = "secretary-derive"
-version = "0.3.10"
+version = "0.3.30"
 dependencies = [
  "proc-macro2",
  "quote",
