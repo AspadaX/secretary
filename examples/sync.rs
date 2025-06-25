@@ -20,7 +20,7 @@ struct PersonExtraction {
 }
 
 /// Example showing how to use the derive macro
-fn main() -> anyhow::Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create a new task instance
     let task = PersonExtraction::new();
 
