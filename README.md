@@ -12,6 +12,7 @@
 - 🔍 **Schema-Based Extraction**: Define your data structure using Rust structs with field-level instructions
 - 📋 **Declarative Field Instructions**: Use `#[task(instruction = "...")]` attributes to guide extraction
 - ⚡ **Async Support**: Built-in async/await support for concurrent processing
+- 🧠 **Reasoning Model Support**: Force generation methods for models without JSON mode (o1, deepseek, etc.)
 - 🔌 **Extensible LLM Support**: Currently supports OpenAI API with more providers planned
 - 🛡️ **Type Safety**: Leverage Rust's type system for reliable data extraction
 - 🧹 **Simplified API**: Consolidated traits reduce boilerplate and complexity
@@ -178,6 +179,20 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
+### Force Generation for Models Without a JSON Mode
+
+Secretary supports reasoning models like o1 and deepseek that don't have built-in JSON mode support through force generation methods:
+
+```rust
+use secretary::traits::{GenerateData, AsyncGenerateData};
+
+// Synchronous force generation
+let result: PersonInfo = llm.force_generate_data(&task, input, &additional_instructions)?;
+
+// Asynchronous force generation
+let result: PersonInfo = llm.async_force_generate_data(&task, input, &additional_instructions).await?;
+```
+
 ### System Prompt Generation
 
 The derive macro automatically generates comprehensive system prompts:
@@ -201,6 +216,10 @@ The `examples/` directory contains practical demonstrations:
 - **`sync.rs`** - Basic person information extraction using synchronous API
 - **`async.rs`** - Async product information extraction with comprehensive testing
 
+### Force Generation (for Reasoning Models)
+- **`sync_force.rs`** - Financial report extraction using force generation for models without JSON mode
+- **`async_force.rs`** - Research paper extraction using async force generation for reasoning models
+
 Run examples with:
 ```bash
 # Basic synchronous example
@@ -209,10 +228,14 @@ cargo run --example sync
 # Async example with comprehensive testing
 cargo run --example async
 
+# Force generation examples (for o1, deepseek, etc.)
+cargo run --example sync_force
+cargo run --example async_force
+
 # To test with real API, set environment variables:
 export SECRETARY_OPENAI_API_BASE="https://api.openai.com/v1"
 export SECRETARY_OPENAI_API_KEY="your-api-key"
-export SECRETARY_OPENAI_MODEL="gpt-4"
+export SECRETARY_OPENAI_MODEL="gpt-4"  # or "o1-preview", "deepseek-reasoner", etc.
 cargo run --example async
 ```
 
@@ -245,8 +268,8 @@ let llm = OpenAILLM::new(&api_base, &api_key, &model)?;
 | Trait | Purpose | Key Methods |
 |-------|---------|-------------|
 | `Task` | Main trait for data extraction tasks | `new()`, `get_system_prompt()`, `push()` |
-| `GenerateData` | Synchronous LLM interaction | `generate_data()`, `generate_data_with_context()` |
-| `AsyncGenerateData` | Asynchronous LLM interaction | `async_generate_data()`, `async_generate_data_with_context()` |
+| `GenerateData` | Synchronous LLM interaction | `generate_data()`, `force_generate_data()` |
+| `AsyncGenerateData` | Asynchronous LLM interaction | `async_generate_data()`, `async_force_generate_data()` |
 | `IsLLM` | LLM provider abstraction | `access_client()`, `access_model()` |
 | `ToJSON`/`FromJSON` | Serialization utilities | `to_json()`, `from_json()` |
 
