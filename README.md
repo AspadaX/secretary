@@ -10,7 +10,6 @@
 
 - 🚀 **Unified Task Trait**: Single trait combining data extraction, schema definition, and system prompt generation with `#[derive(Task)]`
 - 🔍 **Schema-Based Extraction**: Define your data structure using Rust structs with field-level instructions
-- 🔄 **Context-Aware Conversations**: Maintain conversation state for multi-turn interactions
 - 📋 **Declarative Field Instructions**: Use `#[task(instruction = "...")]` attributes to guide extraction
 - ⚡ **Async Support**: Built-in async/await support for concurrent processing
 - 🔌 **Extensible LLM Support**: Currently supports OpenAI API with more providers planned
@@ -34,12 +33,6 @@ use serde::{Serialize, Deserialize};
 // Define your data structure with extraction instructions
 #[derive(Task, Serialize, Deserialize, Debug, Default)]
 struct PersonInfo {
-    // Required fields for Task trait
-    #[serde(skip)]
-    pub context: secretary::MessageList,
-    #[serde(skip)]
-    pub additional_instructions: Vec<String>,
-    
     // Data fields with specific extraction instructions
     #[task(instruction = "Extract the person's full name")]
     pub name: String,
@@ -55,11 +48,14 @@ struct PersonInfo {
 }
 
 fn main() -> anyhow::Result<()> {
-    // Create a task instance with additional instructions
-    let task = PersonInfo::new(vec![
+    // Create a task instance
+    let task = PersonInfo::new();
+    
+    // Additional instructions for the LLM
+    let additional_instructions = vec![
         "Be precise with personal information".to_string(),
         "Use 'Unknown' for missing data".to_string(),
-    ]);
+    ];
     
     // Initialize LLM client
     let llm = OpenAILLM::new(
@@ -70,23 +66,23 @@ fn main() -> anyhow::Result<()> {
     
     // Process natural language input
     let input = "Hi, I'm Jane Smith, 29 years old. My email is jane@example.com. I love hiking, coding, and playing piano.";
+    
     // Process natural language input and get structured data directly
-    let person: PersonInfo = llm.generate_data(&task, input)?;
+    let person: PersonInfo = llm.generate_data(&task, input, &additional_instructions)?;
     println!("{:#?}", person);
     
-    Ok(())
+    Ok()
 }
 ```
 
 ## How It Works
 
 1. **Define Your Schema**: Create a Rust struct with `#[derive(Task)]` and field-level instructions
-2. **Add Required Fields**: Include `context` and `additional_instructions` fields (marked with `#[serde(skip)]`)
-3. **Annotate Fields**: Use `#[task(instruction = "...")]` to guide the LLM on how to extract each field
-4. **Automatic Implementation**: The derive macro implements all necessary traits (data model, system prompt generation, context management)
-5. **Create Task Instance**: Initialize with `YourStruct::new(additional_instructions)`
-6. **Process Text**: Send natural language input to an LLM through the Secretary API
-7. **Get Structured Data**: Receive JSON that can be parsed back into your struct
+2. **Annotate Fields**: Use `#[task(instruction = "...")]` to guide the LLM on how to extract each field
+3. **Automatic Implementation**: The derive macro implements all necessary traits (data model, system prompt generation)
+4. **Create Task Instance**: Initialize with `YourStruct::new()`
+5. **Process Text**: Send natural language input to an LLM through the Secretary API with additional instructions
+6. **Get Structured Data**: Receive structured data parsed into your struct
 
 ### Field Instructions
 
@@ -95,11 +91,6 @@ The `#[task(instruction = "...")]` attribute tells the LLM how to extract each f
 ```rust
 #[derive(Task, Serialize, Deserialize, Debug, Default)]
 struct ProductInfo {
-    #[serde(skip)]
-    pub context: secretary::MessageList,
-    #[serde(skip)]
-    pub additional_instructions: Vec<String>,
-    
     #[task(instruction = "Extract the product name or title")]
     pub name: String,
     
@@ -130,7 +121,8 @@ use tokio;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let llm = OpenAILLM::new("https://api.openai.com/v1", "your-api-key", "gpt-4")?;
-    let task = PersonInfo::new(vec!["Extract accurately".to_string()]);
+    let task = PersonInfo::new();
+    let additional_instructions = vec!["Extract accurately".to_string()];
     
     // Process multiple inputs concurrently
     let inputs = vec![
@@ -142,8 +134,9 @@ async fn main() -> anyhow::Result<()> {
     let futures: Vec<_> = inputs.into_iter().map(|input| {
         let llm = &llm;
         let task = &task;
+        let additional_instructions = &additional_instructions;
         async move {
-            llm.async_generate_data(task, input).await
+            llm.async_generate_data(task, input, additional_instructions).await
         }
     }).collect();
     
@@ -160,27 +153,27 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-### Context-Aware Conversations
+### Multiple Extractions
 
-Maintain conversation state for multi-turn interactions:
+Process multiple inputs with the same task configuration:
 
 ```rust
-use secretary::message_list::Role;
-
 fn main() -> anyhow::Result<()> {
-    let mut task = PersonInfo::new(vec!["Gather information progressively".to_string()]);
+    let task = PersonInfo::new();
+    let additional_instructions = vec!["Extract all available information".to_string()];
     let llm = OpenAILLM::new("https://api.openai.com/v1", "your-api-key", "gpt-4")?;
     
-    // First interaction
-    task.push(Role::User, "Hi, I'm John")?;
-    let response1: PersonInfo = llm.generate_data_with_context(&task)?;
-    task.push(Role::Assistant, &serde_json::to_string(&response1)?)?;
+    let inputs = vec![
+        "Hi, I'm John, 25 years old",
+        "Sarah works as a designer and is 30",
+        "Mike's email is mike@example.com"
+    ];
     
-    // Continue conversation with context
-    task.push(Role::User, "I'm 25 years old and love programming")?;
-    let response2: PersonInfo = llm.generate_data_with_context(&task)?;
+    for input in inputs {
+        let person: PersonInfo = llm.generate_data(&task, input, &additional_instructions)?;
+        println!("{:#?}", person);
+    }
     
-    println!("Final result: {:#?}", response2);
     Ok(())
 }
 ```
@@ -190,15 +183,14 @@ fn main() -> anyhow::Result<()> {
 The derive macro automatically generates comprehensive system prompts:
 
 ```rust
-let task = PersonInfo::new(vec!["Be accurate".to_string()]);
+let task = PersonInfo::new();
 let prompt = task.get_system_prompt();
 println!("{}", prompt);
 
 // Output includes:
 // - JSON structure specification
-// - Field-specific instructions
-// - Additional instructions
-// - Formatting guidelines
+// - Field-specific extraction instructions
+// - Response format requirements
 ```
 
 ## Examples
@@ -262,7 +254,6 @@ let llm = OpenAILLM::new(&api_base, &api_key, &model)?;
 
 - `#[derive(Task)]` - Implements the Task trait automatically
 - `#[task(instruction = "...")]` - Provides field-specific extraction instructions
-- `#[serde(skip)]` - Required for `context` and `additional_instructions` fields
 
 ## Troubleshooting
 
@@ -278,11 +269,6 @@ let llm = OpenAILLM::new(&api_base, &api_key, &model)?;
 - Check that field types match the expected JSON structure
 - Verify that optional fields are properly handled
 
-**Context Management Issues**
-- Remember to include required fields: `context` and `additional_instructions`
-- Mark these fields with `#[serde(skip)]`
-- Use `push()` method to add messages to context
-
 ### Performance Tips
 
 - Use async methods for concurrent processing
@@ -292,6 +278,7 @@ let llm = OpenAILLM::new(&api_base, &api_key, &model)?;
 
 ## Roadmap
 
+- [ ] Context-aware conversations and multi-turn interactions
 - [ ] Support for additional LLM providers (Anthropic, Azure OpenAI, etc.)
 - [ ] Enhanced error handling and validation
 - [ ] Performance optimizations and caching

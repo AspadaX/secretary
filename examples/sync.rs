@@ -2,15 +2,9 @@ use secretary::llm_providers::openai::OpenAILLM;
 use secretary::traits::{GenerateData, Task};
 use serde::{Deserialize, Serialize};
 
-/// Example data structure using the new Task derive macro
+/// Example data structure using the Task derive macro
 #[derive(Task, Serialize, Deserialize, Debug, Default)]
 struct PersonExtraction {
-    /// The context and additional instructions (required by Task trait)
-    #[serde(skip)]
-    pub context: secretary::MessageList,
-    #[serde(skip)]
-    pub additional_instructions: Vec<String>,
-
     /// Data fields with extraction instructions
     #[task(instruction = "Extract the person's full name from the text")]
     pub name: String,
@@ -27,11 +21,14 @@ struct PersonExtraction {
 
 /// Example showing how to use the derive macro
 fn main() -> anyhow::Result<()> {
-    // Create a new task instance with additional instructions
-    let task = PersonExtraction::new(vec![
+    // Create a new task instance
+    let task = PersonExtraction::new();
+
+    // Additional instructions for the LLM
+    let additional_instructions = vec![
         "Focus on extracting accurate information".to_string(),
         "If information is not available, use appropriate defaults".to_string(),
-    ]);
+    ];
 
     // Example text to extract from
     let text =
@@ -44,9 +41,9 @@ fn main() -> anyhow::Result<()> {
         &std::env::var("SECRETARY_OPENAI_MODEL").unwrap(),
     )?;
 
-    // Generate JSON using the task
-    let result: PersonExtraction = llm.generate_data(&task, text)?;
-    println!("Generated JSON: {:#?}", result);
+    // Generate structured data using the task
+    let result: PersonExtraction = llm.generate_data(&task, text, &additional_instructions)?;
+    println!("Generated data: {:#?}", result);
 
     Ok(())
 }
@@ -57,20 +54,25 @@ mod tests {
 
     #[test]
     fn test_task_creation() {
-        let task = PersonExtraction::new(vec!["test instruction".to_string()]);
-        assert_eq!(task.additional_instructions.len(), 1);
-        assert_eq!(task.additional_instructions[0], "test instruction");
+        let task = PersonExtraction::new();
+        // Task should be created successfully with default values
+        assert_eq!(task.name, "");
+        assert_eq!(task.age, 0);
+        assert_eq!(task.email, None);
+        assert_eq!(task.occupation, "");
     }
 
     #[test]
     fn test_system_prompt_generation() {
-        let task = PersonExtraction::new(vec!["additional instruction".to_string()]);
+        let task = PersonExtraction::new();
         let prompt = task.get_system_prompt();
 
         // Check that the prompt contains the expected elements
         assert!(prompt.contains("json structure"));
         assert!(prompt.contains("Field instructions"));
-        assert!(prompt.contains("Additional instructions"));
-        assert!(prompt.contains("additional instruction"));
+        assert!(prompt.contains("name"));
+        assert!(prompt.contains("age"));
+        assert!(prompt.contains("email"));
+        assert!(prompt.contains("occupation"));
     }
 }
