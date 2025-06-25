@@ -122,6 +122,47 @@ where
 
         Ok(serde_json::from_str(&result)?)
     }
+    
+    fn force_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error>> {
+        let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
+        let runtime: Runtime = tokio::runtime::Runtime::new()?;
+        let result: String = runtime.block_on(async {
+            let request = CreateChatCompletionRequestArgs::default()
+                .model(&self.access_model().to_string())
+                .messages(vec![
+                    ChatCompletionRequestUserMessageArgs::default()
+                        .content(vec![
+                            ChatCompletionRequestMessageContentPartTextArgs::default()
+                                .text(
+                                    task.get_system_prompt()
+                                        + &formatted_additional_instructions
+                                        + "\nThis is the basis for generating a json:\n"
+                                        + target,
+                                )
+                                .build()?
+                                .into(),
+                        ])
+                        .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?
+                        .into(),
+                ])
+                .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
+          
+            let response: CreateChatCompletionResponse = self
+                .access_client()
+                .chat()
+                .create(request.clone())
+                .await
+                .map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
+
+            if let Some(content) = response.choices[0].clone().message.content {
+                return Ok::<String, Box<dyn std::error::Error>>(content);
+            }
+
+            return Err(SecretaryError::NoLLMResponse.into());
+        })?;
+
+        Ok(surfing::serde::from_mixed_text(&result)?)
+    }
 }
 
 pub trait AsyncGenerateData
@@ -137,7 +178,7 @@ where
     /// * `task` - A Task implementation that provides the system prompt and schema.
     /// * `target` - A string slice that holds the data to be sent to the LLM to generate a json.
     ///
-    /// # Returns
+    /// ::<String, Box<dyn std::error::Error>># Returns
     ///
     /// * `Result<String, Box<dyn std::error::Error>>` - A result containing the JSON response as a string or an Box<dyn std::error::Error>.
     ///
@@ -196,6 +237,42 @@ where
 
         if let Some(content) = response.choices[0].clone().message.content {
             return Ok(serde_json::from_str(&content)?);
+        }
+
+        return Err(SecretaryError::NoLLMResponse.into());
+    }
+    
+    async fn async_force_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error>> {
+        let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
+        let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
+            .model(&self.access_model().to_string())
+            .messages(vec![
+                ChatCompletionRequestUserMessageArgs::default()
+                    .content(vec![
+                        ChatCompletionRequestMessageContentPartTextArgs::default()
+                            .text(
+                                task.get_system_prompt()
+                                    + &formatted_additional_instructions
+                                    + "\nThis is the basis for generating a json:\n"
+                                    + target,
+                            )
+                            .build()?
+                            .into(),
+                    ])
+                    .build()?
+                    .into(),
+            ])
+            .build()?;
+
+        let response: CreateChatCompletionResponse =
+            self.access_client()
+                .chat()
+                .create(request.clone())
+                .await
+                .map_err(|e| format!("Failed to execute function: {}", e))?;
+
+        if let Some(content) = response.choices[0].clone().message.content {
+            return Ok(surfing::serde::from_mixed_text(&content)?);
         }
 
         return Err(SecretaryError::NoLLMResponse.into());
