@@ -142,17 +142,17 @@ where
                                 .build()?
                                 .into(),
                         ])
-                        .build()?
+                        .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?
                         .into(),
                 ])
-                .build()?;
-
-            let response: CreateChatCompletionResponse =
-                self.access_client()
-                    .chat()
-                    .create(request.clone())
-                    .await
-                    .map_err(|e| format!("Failed to execute function: {}", e))?;
+                .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
+          
+            let response: CreateChatCompletionResponse = self
+                .access_client()
+                .chat()
+                .create(request.clone())
+                .await
+                .map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
 
             if let Some(content) = response.choices[0].clone().message.content {
                 return Ok::<String, Box<dyn std::error::Error>>(content);
