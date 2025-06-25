@@ -28,7 +28,7 @@ struct ProductExtraction {
 
 /// Async example demonstrating the Task derive macro
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Secretary Async Example - Product Information Extraction");
     println!("{}", "=".repeat(60));
 
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn test_system_prompt_generation() {
-        let task = ProductExtraction::new(vec![]);
+        let task = ProductExtraction::new();
         let prompt = task.get_system_prompt();
 
         // Check that the prompt contains expected elements
