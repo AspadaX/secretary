@@ -29,7 +29,7 @@ impl AzureOpenAILLM {
         api_key: &str,
         deployment_id: &str,
         api_version: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let llm_configuration: AzureConfig = AzureConfig::default()
             .with_deployment_id(deployment_id)
             .with_api_version(api_version)
