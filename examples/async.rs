@@ -28,7 +28,7 @@ struct ProductExtraction {
 
 /// Async example demonstrating the Task derive macro
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     println!("Secretary Async Example - Product Information Extraction");
     println!("{}", "=".repeat(60));
 

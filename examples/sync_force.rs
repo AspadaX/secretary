@@ -39,7 +39,7 @@ struct FinancialReportExtraction {
 /// Sync force example demonstrating JSON parsing for reasoning models
 /// This example shows how to use force_generate_data for models like o1 and deepseek
 /// that don't have built-in JSON mode support but can still generate structured data
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     println!("Secretary Sync Force Example - Financial Report Extraction");
     println!("{}", "=".repeat(62));
     println!("This example demonstrates force JSON parsing for reasoning models");

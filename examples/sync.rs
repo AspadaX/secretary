@@ -20,7 +20,7 @@ struct PersonExtraction {
 }
 
 /// Example showing how to use the derive macro
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     // Create a new task instance
     let task = PersonExtraction::new();
 

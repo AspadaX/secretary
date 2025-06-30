@@ -80,8 +80,8 @@ where
     ///
     /// # Returns
     ///
-    /// * `Result<String, Box<dyn std::error::Error>>` - A result containing the JSON response as a string or an Box<dyn std::error::Error>.
-    fn generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error>> {
+    /// * `Result<String, Box<dyn std::error::Error + Send + Sync + 'static>>` - A result containing the JSON response as a string or an Box<dyn std::error::Error + Send + Sync + 'static>.
+    fn generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let runtime: Runtime = tokio::runtime::Runtime::new()?;
         let result: String = runtime.block_on(async {
@@ -123,7 +123,7 @@ where
         Ok(serde_json::from_str(&result)?)
     }
     
-    fn force_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error>> {
+    fn force_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let runtime: Runtime = tokio::runtime::Runtime::new()?;
         let result: String = runtime.block_on(async {
@@ -155,7 +155,7 @@ where
                 .map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
 
             if let Some(content) = response.choices[0].clone().message.content {
-                return Ok::<String, Box<dyn std::error::Error>>(content);
+                return Ok::<String, Box<dyn std::error::Error + Send + Sync + 'static>>(content);
             }
 
             return Err(SecretaryError::NoLLMResponse.into());
@@ -178,9 +178,9 @@ where
     /// * `task` - A Task implementation that provides the system prompt and schema.
     /// * `target` - A string slice that holds the data to be sent to the LLM to generate a json.
     ///
-    /// ::<String, Box<dyn std::error::Error>># Returns
+    /// ::<String, Box<dyn std::error::Error + Send + Sync + 'static>># Returns
     ///
-    /// * `Result<String, Box<dyn std::error::Error>>` - A result containing the JSON response as a string or an Box<dyn std::error::Error>.
+    /// * `Result<String, Box<dyn std::error::Error + Send + Sync + 'static>>` - A result containing the JSON response as a string or an Box<dyn std::error::Error + Send + Sync + 'static>.
     ///
     /// # Example
     ///
@@ -205,7 +205,7 @@ where
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error>> {
+    async fn async_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
@@ -242,7 +242,7 @@ where
         return Err(SecretaryError::NoLLMResponse.into());
     }
     
-    async fn async_force_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error>> {
+    async fn async_force_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
@@ -318,7 +318,7 @@ pub trait ToJSON
 where
     Self: serde::Serialize + Sized,
 {
-    fn to_json(&self) -> Result<String, Box<dyn std::error::Error>> {
+    fn to_json(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
         Ok(serde_json::to_string(self)?)
     }
 }
@@ -352,7 +352,7 @@ where
 /// }
 /// ```
 pub trait FromJSON {
-    fn from_json(json: &str) -> Result<Self, Box<dyn std::error::Error>>
+    fn from_json(json: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>>
     where
         Self: for<'de> serde::Deserialize<'de> + Sized,
     {
