@@ -29,7 +29,7 @@ impl AzureOpenAILLM {
         api_key: &str,
         deployment_id: &str,
         api_version: &str,
-    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    ) -> Self {
         let llm_configuration: AzureConfig = AzureConfig::default()
             .with_deployment_id(deployment_id)
             .with_api_version(api_version)
@@ -37,10 +37,10 @@ impl AzureOpenAILLM {
             .with_api_base(api_base);
         let client: Client<AzureConfig> = async_openai::Client::with_config(llm_configuration);
 
-        Ok(Self {
+        Self {
             model: deployment_id.to_string(),
             client,
-        })
+        }
     }
 }
 
