@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -20,7 +21,7 @@ use crate::SecretaryError;
 /// Implement this for various LLM API standards
 pub trait IsLLM {
     /// Provides access to the client instance.
-    fn access_client(&self) -> &Client<impl Config>;
+    fn access_client(&self) -> &Client<impl Config + Sync>;
 
     /// Provides access to the model identifier.
     fn access_model(&self) -> &str;
@@ -165,6 +166,7 @@ where
     }
 }
 
+#[async_trait]
 pub trait AsyncGenerateData
 where
     Self: IsLLM,
@@ -205,7 +207,7 @@ where
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    async fn async_generate_data<T: Task + Sync + Send>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())
@@ -242,7 +244,7 @@ where
         return Err(SecretaryError::NoLLMResponse.into());
     }
     
-    async fn async_force_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    async fn async_force_generate_data<T: Task + Send + Sync>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
         let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
             .model(&self.access_model().to_string())

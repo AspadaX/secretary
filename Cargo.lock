@@ -55,6 +55,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-trait"
+version = "0.1.88"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e539d3fca749fcee5236ab05e93a52867dd549cc157c8cb7f99595f3cedffdb5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "backoff"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1070,9 +1081,10 @@ dependencies = [
 
 [[package]]
 name = "secretary"
-version = "0.3.44"
+version = "0.3.45"
 dependencies = [
  "async-openai",
+ "async-trait",
  "secretary-derive",
  "serde",
  "serde_json",
