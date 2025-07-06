@@ -1,26 +1,21 @@
 use async_trait::async_trait;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use async_openai::{
-    Client,
-    config::Config,
-    types::{
-        ChatCompletionRequestMessageContentPartTextArgs, ChatCompletionRequestUserMessageArgs,
-        CreateChatCompletionRequest, CreateChatCompletionRequestArgs, CreateChatCompletionResponse,
-        ResponseFormat,
-    },
-};
 use tokio::runtime::Runtime;
 
 // Re-export the derive macro
 pub use secretary_derive::Task;
 
-use crate::SecretaryError;
+use crate::{message::Message, SecretaryError};
 
 /// Implement this for various LLM API standards
 pub trait IsLLM {
+    /// Get raw response from an LLM
+    fn send_message(&self, message: Message) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>>;
+    
     /// Provides access to the client instance.
-    fn access_client(&self) -> &Client<impl Config + Sync>;
+    fn access_client(&self) -> &Client;
 
     /// Provides access to the model identifier.
     fn access_model(&self) -> &str;

@@ -1,14 +1,16 @@
-use async_openai::Client;
-use async_openai::config::OpenAIConfig;
+use reqwest::Client;
+use serde_json::json;
 
-use crate::traits::{AsyncGenerateData, GenerateData, IsLLM};
+use crate::{constants::OPENAI_CHAT_COMPLETION_ROUTE, traits::{AsyncGenerateData, GenerateData, IsLLM, LLM}};
 
 /// Represents a Large Language Model (LLM) that is compatible with OpenAI API.
 /// An LLM is the primary tool we use to convert unstructured data into structured data.
 #[derive(Debug, Clone)]
 pub struct OpenAILLM {
     model: String,
-    client: Client<OpenAIConfig>,
+    api_key: String,
+    api_base: String,
+    client: Client,
 }
 
 impl OpenAILLM {
@@ -24,20 +26,36 @@ impl OpenAILLM {
     ///
     /// * `Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>>` - On success, returns an instance of the LLM struct. On failure, returns an Box<dyn std::error::Error + Send + Sync + 'static>.
     pub fn new(api_base: &str, api_key: &str, model: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let llm_configuration: OpenAIConfig = OpenAIConfig::default()
-            .with_api_key(api_key)
-            .with_api_base(api_base);
-        let client: Client<OpenAIConfig> = async_openai::Client::with_config(llm_configuration);
+        let client: Client = Client::new();
 
         Ok(Self {
             model: model.to_string(),
+            api_base: api_base.to_string(),
+            api_key: api_key.to_string(),
             client,
         })
     }
 }
 
 impl IsLLM for OpenAILLM {
-    fn access_client(&self) -> &Client<impl async_openai::config::Config> {
+    fn send_message(&self, message: crate::message::Message) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let request = self.access_client()
+            .post(self.api_base + OPENAI_CHAT_COMPLETION_ROUTE)
+            .body(
+                json!(
+                    {
+                        "model": self.model,
+                        "messages": [
+                            message.to
+                        ]
+                    }
+                )
+            )
+            .send()
+            .await?
+    }
+    
+    fn access_client(&self) -> &Client {
         &self.client
     }
 
