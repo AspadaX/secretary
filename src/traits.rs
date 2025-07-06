@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use async_openai::{
     Client,
@@ -30,40 +29,6 @@ pub trait IsLLM {
 /// The main Task trait that combines data model, system prompt, and context functionality.
 /// This trait should be implemented using the derive macro for user-defined structs.
 pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
-    /// Get the data model in JSON format with instructions specified.
-    fn get_data_model_instructions() -> Value {
-        serde_json::to_value(Self::provide_data_model_instructions())
-            .expect("Failed to convert data model to JSON")
-    }
-
-    /// Get the data model with instructions specified, which will be used
-    /// to instruct the LLM for what to generate. Typically, this is the only method
-    /// you need to implement in the DataModel trait.
-    ///
-    /// ```rust
-    /// use secretary::traits::Task;
-    /// use serde::{Serialize, Deserialize};
-    ///
-    /// #[derive(Serialize, Deserialize, Default)]
-    /// pub struct Example {
-    ///     field: String,
-    /// }
-    ///
-    /// impl Task for Example {
-    ///    fn provide_data_model_instructions() -> Self {
-    ///        Example {
-    ///           field: "Extract the field of the subject and put it here".to_string(),
-    ///        }
-    ///    }
-    ///    
-    ///    fn get_system_prompt(&self) -> String {
-    ///        "Extract data".to_string()
-    ///    }
-    /// }
-    ///
-    /// ```
-    fn provide_data_model_instructions() -> Self;
-
     /// Get the system prompt (combines SystemPrompt functionality)
     fn get_system_prompt(&self) -> String;
 }
