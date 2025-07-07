@@ -14,7 +14,7 @@ members = [".", "secretary-derive"]
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-secretary-derive = { path = "secretary-derive", version = "0.3.50" }
+secretary-derive = { path = "secretary-derive", version = "0.3.60" }
 surfing = { version = "0.1.1", features = ["serde"] }
 async-trait = "0.1.88"
 reqwest = { version = "0.12.22", features = ["blocking", "json", "rustls-tls"] }
