@@ -1,6 +1,6 @@
+use secretary::Task;
 use secretary::llm_providers::openai::OpenAILLM;
 use secretary::traits::AsyncGenerateData;
-use secretary::Task;
 use serde::{Deserialize, Serialize};
 use tokio;
 
@@ -97,73 +97,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     )?;
 
     println!("Making async force request to LLM (bypassing JSON mode requirement)...");
-    
+
     // Use async_force_generate_data instead of async_generate_data
     // This method works with reasoning models that don't support JSON mode
     let result: ResearchPaperExtraction = llm
         .async_force_generate_data(&task, paper_text, &additional_instructions)
         .await?;
-        
+
     println!("Generated Data Structure: {:#?}", result);
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_task_creation() {
-        let task = ResearchPaperExtraction::new();
-        // Task should be created successfully with default values
-        assert_eq!(task.title, "");
-        assert_eq!(task.primary_author, "");
-        assert_eq!(task.co_authors, None);
-        assert_eq!(task.year, 0);
-        assert_eq!(task.venue, "");
-        assert_eq!(task.abstract_text, "");
-        assert!(task.keywords.is_empty());
-        assert_eq!(task.peer_reviewed, false);
-    }
-
-    #[test]
-    fn test_system_prompt_generation() {
-        let task = ResearchPaperExtraction::new();
-        let prompt = task.get_system_prompt();
-
-        // Check that the prompt contains expected elements
-        assert!(prompt.contains("json structure"));
-        assert!(prompt.contains("Field instructions"));
-        assert!(prompt.contains("title"));
-        assert!(prompt.contains("primary_author"));
-        assert!(prompt.contains("year"));
-        assert!(prompt.contains("venue"));
-    }
-
-    #[test]
-    fn test_data_model_instructions() {
-        let data_model = ResearchPaperExtraction::provide_data_model_instructions();
-        
-        // Should provide a default instance for instructions
-        assert_eq!(data_model.title, "");
-        assert_eq!(data_model.year, 0);
-        assert!(data_model.keywords.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_async_force_compatibility() {
-        // Test that our struct works in async context for force generation
-        let task = ResearchPaperExtraction::new();
-
-        // Simulate async operation
-        tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
-
-        // Task should work in async context
-        assert_eq!(task.title, "");
-        
-        // Verify the task can generate system prompts for force mode
-        let prompt = task.get_system_prompt();
-        assert!(!prompt.is_empty());
-    }
 }

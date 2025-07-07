@@ -1,14 +1,18 @@
-use async_openai::Client;
-use async_openai::config::OpenAIConfig;
+use serde_json::{json, Value};
 
-use crate::traits::{AsyncGenerateData, GenerateData, IsLLM};
+use crate::{
+    constants::OPENAI_CHAT_COMPLETION_ROUTE,
+    message::Message,
+    traits::{AsyncGenerateData, GenerateData, IsLLM},
+};
 
 /// Represents a Large Language Model (LLM) that is compatible with OpenAI API.
 /// An LLM is the primary tool we use to convert unstructured data into structured data.
 #[derive(Debug, Clone)]
 pub struct OpenAILLM {
     model: String,
-    client: Client<OpenAIConfig>,
+    api_key: String,
+    api_base: String,
 }
 
 impl OpenAILLM {
@@ -23,26 +27,52 @@ impl OpenAILLM {
     /// # Returns
     ///
     /// * `Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>>` - On success, returns an instance of the LLM struct. On failure, returns an Box<dyn std::error::Error + Send + Sync + 'static>.
-    pub fn new(api_base: &str, api_key: &str, model: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let llm_configuration: OpenAIConfig = OpenAIConfig::default()
-            .with_api_key(api_key)
-            .with_api_base(api_base);
-        let client: Client<OpenAIConfig> = async_openai::Client::with_config(llm_configuration);
-
+    pub fn new(
+        api_base: &str,
+        api_key: &str,
+        model: &str,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
         Ok(Self {
             model: model.to_string(),
-            client,
+            api_base: api_base.to_string(),
+            api_key: api_key.to_string(),
         })
     }
 }
 
 impl IsLLM for OpenAILLM {
-    fn access_client(&self) -> &Client<impl async_openai::config::Config> {
-        &self.client
+    fn get_authorization_credentials(&self) -> (String, String) {
+        (
+            "Authorization".to_string(),
+            format!("Bearer {}", self.api_key),
+        )
     }
 
-    fn access_model(&self) -> &str {
+    fn get_model_ref(&self) -> &str {
         &self.model
+    }
+
+    fn get_chat_completion_request_url(&self) -> String {
+        format!("{}{}", self.api_base, OPENAI_CHAT_COMPLETION_ROUTE)
+    }
+
+    fn get_reqeust_body(&self, message: Message, return_json: bool) -> Value {
+        if return_json {
+            return json!(
+                {
+                    "model": self.get_model_ref(),
+                    "messages": [message],
+                    "response_format": {"type": "json_object"}
+                }
+            );
+        }
+
+        return json!(
+            {
+                "model": self.get_model_ref(),
+                "messages": [message],
+            }
+        );
     }
 }
 

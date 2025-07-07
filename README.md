@@ -13,7 +13,7 @@
 - 📋 **Declarative Field Instructions**: Use `#[task(instruction = "...")]` attributes to guide extraction
 - ⚡ **Async Support**: Built-in async/await support for concurrent processing
 - 🧠 **Reasoning Model Support**: Force generation methods for models without JSON mode (o1, deepseek, etc.)
-- 🔌 **Extensible LLM Support**: Currently supports OpenAI API with more providers planned
+- 🔌 **Multiple LLM Providers**: Supports OpenAI API and Azure OpenAI with extensible provider system
 - 🛡️ **Type Safety**: Leverage Rust's type system for reliable data extraction
 - 🧹 **Simplified API**: Consolidated traits reduce boilerplate and complexity
 
@@ -72,7 +72,7 @@ fn main() -> anyhow::Result<()> {
     let person: PersonInfo = llm.generate_data(&task, input, &additional_instructions)?;
     println!("{:#?}", person);
     
-    Ok()
+    Ok(())
 }
 ```
 
@@ -233,13 +233,23 @@ cargo run --example sync_force
 cargo run --example async_force
 
 # To test with real API, set environment variables:
+# For OpenAI:
 export SECRETARY_OPENAI_API_BASE="https://api.openai.com/v1"
 export SECRETARY_OPENAI_API_KEY="your-api-key"
 export SECRETARY_OPENAI_MODEL="gpt-4"  # or "o1-preview", "deepseek-reasoner", etc.
+
+# For Azure OpenAI:
+export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
+export AZURE_OPENAI_API_KEY="your-azure-api-key"
+export AZURE_OPENAI_DEPLOYMENT_ID="your-deployment-id"
+export AZURE_OPENAI_API_VERSION="2024-02-15-preview"
+
 cargo run --example async
 ```
 
-## Environment Setup
+## LLM Provider Setup
+
+### OpenAI
 
 For production use with OpenAI:
 
@@ -251,6 +261,8 @@ export SECRETARY_OPENAI_MODEL="gpt-4"
 
 In your code:
 ```rust
+use secretary::llm_providers::openai::OpenAILLM;
+
 let api_base = std::env::var("SECRETARY_OPENAI_API_BASE")
     .expect("SECRETARY_OPENAI_API_BASE environment variable not set");
 let api_key = std::env::var("SECRETARY_OPENAI_API_KEY")
@@ -261,22 +273,62 @@ let model = std::env::var("SECRETARY_OPENAI_MODEL")
 let llm = OpenAILLM::new(&api_base, &api_key, &model)?;
 ```
 
+### Azure OpenAI
+
+For Azure OpenAI deployments:
+
+```bash
+export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
+export AZURE_OPENAI_API_KEY="your-azure-api-key"
+export AZURE_OPENAI_DEPLOYMENT_ID="your-deployment-id"
+export AZURE_OPENAI_API_VERSION="2024-02-15-preview"
+```
+
+In your code:
+```rust
+use secretary::llm_providers::azure::AzureOpenAILLM;
+
+let endpoint = std::env::var("AZURE_OPENAI_ENDPOINT")
+    .expect("AZURE_OPENAI_ENDPOINT environment variable not set");
+let api_key = std::env::var("AZURE_OPENAI_API_KEY")
+    .expect("AZURE_OPENAI_API_KEY environment variable not set");
+let deployment_id = std::env::var("AZURE_OPENAI_DEPLOYMENT_ID")
+    .expect("AZURE_OPENAI_DEPLOYMENT_ID environment variable not set");
+let api_version = std::env::var("AZURE_OPENAI_API_VERSION")
+    .expect("AZURE_OPENAI_API_VERSION environment variable not set");
+
+let llm = AzureOpenAILLM::new(&endpoint, &api_key, &deployment_id, &api_version);
+```
+
 ## API Reference
 
 ### Core Traits
 
 | Trait | Purpose | Key Methods |
 |-------|---------|-------------|
-| `Task` | Main trait for data extraction tasks | `new()`, `get_system_prompt()`, `push()` |
+| `Task` | Main trait for data extraction tasks | `get_system_prompt()` |
 | `GenerateData` | Synchronous LLM interaction | `generate_data()`, `force_generate_data()` |
 | `AsyncGenerateData` | Asynchronous LLM interaction | `async_generate_data()`, `async_force_generate_data()` |
-| `IsLLM` | LLM provider abstraction | `access_client()`, `access_model()` |
-| `ToJSON`/`FromJSON` | Serialization utilities | `to_json()`, `from_json()` |
+| `IsLLM` | LLM provider abstraction | `send_message()`, `async_send_message()`, `get_authorization_credentials()` |
 
-### Derive Macro Attributes
+### LLM Providers
 
-- `#[derive(Task)]` - Implements the Task trait automatically
-- `#[task(instruction = "...")]` - Provides field-specific extraction instructions
+| Provider | Description | Constructor |
+|----------|-------------|-------------|
+| `OpenAILLM` | OpenAI API compatible provider | `new(api_base, api_key, model)` |
+| `AzureOpenAILLM` | Azure OpenAI service provider | `new(endpoint, api_key, deployment_id, api_version)` |
+
+### Derive Macro (secretary-derive)
+
+The `secretary-derive` crate provides procedural macros for automatic trait implementation:
+
+- `#[derive(Task)]` - Automatically implements the `Task` trait with system prompt generation
+- `#[task(instruction = "...")]` - Provides field-specific extraction instructions for the LLM
+
+The derive macro generates:
+- JSON schema definitions based on your struct fields
+- System prompts that include field instructions
+- Default implementations for the `Task` trait
 
 ## Troubleshooting
 
@@ -302,12 +354,19 @@ let llm = OpenAILLM::new(&api_base, &api_key, &model)?;
 ## Roadmap
 
 - [ ] Context-aware conversations and multi-turn interactions
-- [ ] Support for additional LLM providers (Anthropic, Azure OpenAI, etc.)
+- [x] Azure OpenAI support (✅ Completed in v0.3.60)
+- [ ] Support for additional LLM providers (AWS, Anthropic, Cohere, etc.)
 - [ ] Enhanced error handling and validation
 - [ ] Performance optimizations and caching
 - [ ] Integration with more serialization formats
 - [ ] Advanced prompt engineering features
 - [ ] Streaming response support
+
+### Dependencies
+
+- **Core**: `serde`, `serde_json`, `reqwest`, `tokio`, `async-trait`
+- **Derive**: `proc-macro2`, `quote`, `syn`
+- **Parsing**: `surfing` (for force generation with reasoning models)
 
 ## Contributing
 

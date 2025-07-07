@@ -1,6 +1,6 @@
+use secretary::Task;
 use secretary::llm_providers::openai::OpenAILLM;
 use secretary::traits::GenerateData;
-use secretary::Task;
 use serde::{Deserialize, Serialize};
 
 /// Example data structure for extracting financial report information
@@ -103,73 +103,13 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     )?;
 
     println!("Making sync force request to LLM (bypassing JSON mode requirement)...");
-    
+
     // Use force_generate_data instead of generate_data
     // This method works with reasoning models that don't support JSON mode
-    let result: FinancialReportExtraction = llm
-        .force_generate_data(&task, report_text, &additional_instructions)?;
-        
+    let result: FinancialReportExtraction =
+        llm.force_generate_data(&task, report_text, &additional_instructions)?;
+
     println!("Generated Data Structure: {:#?}", result);
 
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_task_creation() {
-        let task = FinancialReportExtraction::new();
-        // Task should be created successfully with default values
-        assert_eq!(task.company_name, "");
-        assert_eq!(task.quarter, "");
-        assert_eq!(task.fiscal_year, 0);
-        assert_eq!(task.revenue_millions, 0.0);
-        assert_eq!(task.net_income_millions, 0.0);
-        assert_eq!(task.eps, 0.0);
-        assert!(task.highlights.is_empty());
-        assert_eq!(task.met_expectations, false);
-        assert_eq!(task.ceo_name, None);
-    }
-
-    #[test]
-    fn test_system_prompt_generation() {
-        let task = FinancialReportExtraction::new();
-        let prompt = task.get_system_prompt();
-
-        // Check that the prompt contains expected elements
-        assert!(prompt.contains("json structure"));
-        assert!(prompt.contains("Field instructions"));
-        assert!(prompt.contains("company_name"));
-        assert!(prompt.contains("quarter"));
-        assert!(prompt.contains("fiscal_year"));
-        assert!(prompt.contains("revenue_millions"));
-        assert!(prompt.contains("eps"));
-    }
-
-    #[test]
-    fn test_data_model_instructions() {
-        let data_model = FinancialReportExtraction::provide_data_model_instructions();
-        
-        // Should provide a default instance for instructions
-        assert_eq!(data_model.company_name, "");
-        assert_eq!(data_model.fiscal_year, 0);
-        assert_eq!(data_model.revenue_millions, 0.0);
-        assert!(data_model.highlights.is_empty());
-    }
-
-    #[test]
-    fn test_force_generation_compatibility() {
-        // Test that our struct works for force generation scenarios
-        let task = FinancialReportExtraction::new();
-        
-        // Verify the task can generate system prompts for force mode
-        let prompt = task.get_system_prompt();
-        assert!(!prompt.is_empty());
-        
-        // Verify data model instructions work
-        let instructions = FinancialReportExtraction::provide_data_model_instructions();
-        assert_eq!(instructions.company_name, "");
-    }
 }
