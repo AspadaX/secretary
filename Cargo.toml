@@ -1,6 +1,6 @@
 [package]
 name = "secretary"
-version = "0.3.60"
+version = "0.3.61"
 edition = "2024"
 description = "Transform natural language into structured data using large language models (LLMs) with powerful derive macros"
 authors =  ["Xinyu Bao <baoxinyuworks@163.com>"]
