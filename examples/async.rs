@@ -1,5 +1,5 @@
-use secretary::traits::{AsyncGenerateData, Task};
 use secretary::llm_providers::openai::OpenAILLM;
+use secretary::traits::{AsyncGenerateData, Task};
 use serde::{Deserialize, Serialize};
 use tokio;
 
@@ -75,7 +75,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     )?;
 
     println!("Making async request to LLM...");
-    let result: ProductExtraction = llm.async_generate_data(&task, product_text, &additional_instructions).await?;
+    let result: ProductExtraction = llm
+        .async_generate_data(&task, product_text, &additional_instructions)
+        .await?;
     println!("Generated Data Structure: {:#?}", result);
 
     println!();
@@ -117,7 +119,7 @@ mod tests {
     fn test_data_model_instructions() {
         let task = ProductExtraction::new();
         let data_model = ProductExtraction::provide_data_model_instructions();
-        
+
         // Should provide a default instance for instructions
         assert_eq!(data_model.name, "");
         assert_eq!(data_model.price, 0.0);

@@ -1,24 +1,60 @@
 use async_trait::async_trait;
-use reqwest::Client;
+use reqwest::{header::{AUTHORIZATION, CONTENT_TYPE}, Response};
 use serde::{Deserialize, Serialize};
 
-use tokio::runtime::Runtime;
+use serde_json::Value;
 
 // Re-export the derive macro
 pub use secretary_derive::Task;
 
-use crate::{message::Message, SecretaryError};
+use crate::{SecretaryError, message::Message};
 
 /// Implement this for various LLM API standards
+#[async_trait]
 pub trait IsLLM {
-    /// Get raw response from an LLM
-    fn send_message(&self, message: Message) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>>;
+    fn send_message(
+        &self,
+        message: Message,
+        return_json: bool,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let authorization_credentials: (String, String) = self.get_authorization_credentials();
+        let request: reqwest::blocking::Response = reqwest::blocking::Client::new()
+            .post(self.get_chat_completion_request_url())
+            .header(AUTHORIZATION, authorization_credentials.1)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&self.get_reqeust_body(message, return_json))
+            .send()?;
+        
+        Ok(request.text()?)
+    }
     
-    /// Provides access to the client instance.
-    fn access_client(&self) -> &Client;
+    /// Get raw response from an LLM
+    async fn async_send_message(
+        &self,
+        message: Message,
+        return_json: bool,
+    ) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let authorization_credentials: (String, String) = self.get_authorization_credentials();
+        let request: Response = reqwest::Client::new()
+            .post(self.get_chat_completion_request_url())
+            .header(AUTHORIZATION, authorization_credentials.1)
+            .header(CONTENT_TYPE, "application/json")
+            .json(&self.get_reqeust_body(message, return_json))
+            .send()
+            .await?;
+        
+        Ok(request.text().await?)
+    }
 
-    /// Provides access to the model identifier.
-    fn access_model(&self) -> &str;
+    fn get_authorization_credentials(&self) -> (String, String);
+
+    fn get_reqeust_body(&self, message: Message, return_json: bool) -> Value;
+
+    /// Provide a chat completion url
+    fn get_chat_completion_request_url(&self) -> String;
+
+    /// Provides reference to the model identifier.
+    fn get_model_ref(&self) -> &str;
 }
 
 /// The main Task trait that combines data model, system prompt, and context functionality.
@@ -30,7 +66,7 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
 
 pub trait GenerateData
 where
-    Self: IsLLM,
+    Self: IsLLM + Sync,
 {
     /// Generates JSON response from the LLM based on the provided prompt.
     ///
@@ -42,85 +78,64 @@ where
     /// # Returns
     ///
     /// * `Result<String, Box<dyn std::error::Error + Send + Sync + 'static>>` - A result containing the JSON response as a string or an Box<dyn std::error::Error + Send + Sync + 'static>.
-    fn generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
-        let runtime: Runtime = tokio::runtime::Runtime::new()?;
-        let result: String = runtime.block_on(async {
-            let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
-                .model(&self.access_model().to_string())
-                .response_format(ResponseFormat::JsonObject)
-                .messages(vec![
-                    ChatCompletionRequestUserMessageArgs::default()
-                        .content(vec![
-                            ChatCompletionRequestMessageContentPartTextArgs::default()
-                                .text(
-                                    task.get_system_prompt()
-                                        + &formatted_additional_instructions
-                                        + "\nThis is the basis for generating a json:\n"
-                                        + target,
-                                )
-                                .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?
-                                .into(),
-                        ])
-                        .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?
-                        .into(),
-                ])
-                .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
+    fn generate_data<T: Task>(
+        &self,
+        task: &T,
+        target: &str,
+        additional_instructions: &Vec<String>,
+    ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let formatted_additional_instructions: String =
+            format_additional_instructions(additional_instructions);
+        let request: String = self.send_message(
+            Message {
+                role: "user".to_string(),
+                content: format!(
+                    "{}{}\nThis is the basis for generating a json:\n{}",
+                    task.get_system_prompt(),
+                    formatted_additional_instructions,
+                    target
+                ),
+            },
+            true,
+        )?;
 
-            let response: CreateChatCompletionResponse = self
-                .access_client()
-                .chat()
-                .create(request.clone())
-                .await
-                .map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
+        let value: Value = serde_json::from_str(&request).unwrap();
+        let result = value["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap()
+            .to_string();
 
-            if let Some(content) = response.choices[0].clone().message.content {
-                return Ok(content);
-            }
-
-            return Err(SecretaryError::NoLLMResponse);
-        })?;
-
-        Ok(serde_json::from_str(&result)?)
+        Ok(serde_json::from_str::<T>(&result)?)
     }
-    
-    fn force_generate_data<T: Task>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
-        let runtime: Runtime = tokio::runtime::Runtime::new()?;
-        let result: String = runtime.block_on(async {
-            let request = CreateChatCompletionRequestArgs::default()
-                .model(&self.access_model().to_string())
-                .messages(vec![
-                    ChatCompletionRequestUserMessageArgs::default()
-                        .content(vec![
-                            ChatCompletionRequestMessageContentPartTextArgs::default()
-                                .text(
-                                    task.get_system_prompt()
-                                        + &formatted_additional_instructions
-                                        + "\nThis is the basis for generating a json:\n"
-                                        + target,
-                                )
-                                .build()?
-                                .into(),
-                        ])
-                        .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?
-                        .into(),
-                ])
-                .build().map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
-          
-            let response: CreateChatCompletionResponse = self
-                .access_client()
-                .chat()
-                .create(request.clone())
-                .await
-                .map_err(|e| SecretaryError::BuildRequestError(e.to_string()))?;
 
-            if let Some(content) = response.choices[0].clone().message.content {
-                return Ok::<String, Box<dyn std::error::Error + Send + Sync + 'static>>(content);
-            }
+    fn force_generate_data<T: Task>(
+        &self,
+        task: &T,
+        target: &str,
+        additional_instructions: &Vec<String>,
+    ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let formatted_additional_instructions: String =
+            format_additional_instructions(additional_instructions);
 
-            return Err(SecretaryError::NoLLMResponse.into());
-        })?;
+        let response: String = self
+            .send_message(
+                Message {
+                    role: "user".to_string(),
+                    content: format!(
+                        "{}{}\nThis is the basis for generating a json:\n{}",
+                        task.get_system_prompt(),
+                        formatted_additional_instructions,
+                        target
+                    ),
+                },
+                false,
+            )?;
+
+        let value: Value = serde_json::from_str(&response).unwrap();
+        let result: String = value["choices"][0]["message"]["content"]
+            .as_str()
+            .unwrap()
+            .to_string();
 
         Ok(surfing::serde::from_mixed_text(&result)?)
     }
@@ -167,158 +182,81 @@ where
     ///     Ok(())
     /// }
     /// ```
-    async fn async_generate_data<T: Task + Sync + Send>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
-        let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
-            .model(&self.access_model().to_string())
-            .response_format(ResponseFormat::JsonObject)
-            .messages(vec![
-                ChatCompletionRequestUserMessageArgs::default()
-                    .content(vec![
-                        ChatCompletionRequestMessageContentPartTextArgs::default()
-                            .text(
-                                task.get_system_prompt()
-                                    + &formatted_additional_instructions
-                                    + "\nThis is the basis for generating a json:\n"
-                                    + target,
-                            )
-                            .build()?
-                            .into(),
-                    ])
-                    .build()?
-                    .into(),
-            ])
-            .build()?;
+    async fn async_generate_data<T: Task + Sync + Send>(
+        &self,
+        task: &T,
+        target: &str,
+        additional_instructions: &Vec<String>,
+    ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let formatted_additional_instructions: String =
+            format_additional_instructions(additional_instructions);
 
-        let response: CreateChatCompletionResponse =
-            self.access_client()
-                .chat()
-                .create(request.clone())
-                .await
-                .map_err(|e| format!("Failed to execute function: {}", e))?;
+        let request: Result<String, Box<dyn std::error::Error + Send + Sync>> = self
+            .async_send_message(
+                Message {
+                    role: "user".to_string(),
+                    content: format!(
+                        "{}{}\nThis is the basis for generating a json:\n{}",
+                        task.get_system_prompt(),
+                        formatted_additional_instructions,
+                        target
+                    ),
+                },
+                true,
+            )
+            .await;
 
-        if let Some(content) = response.choices[0].clone().message.content {
-            return Ok(serde_json::from_str(&content)?);
-        }
+        let result = match request {
+            Ok(result) => {
+                dbg!(&result);
+                let value: Value = serde_json::from_str(&result).unwrap();
+                value["choices"][0]["message"]["content"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            }
+            Err(error) => return Err(SecretaryError::BuildRequestError(error.to_string()).into()),
+        };
 
-        return Err(SecretaryError::NoLLMResponse.into());
+        Ok(serde_json::from_str(&result)?)
     }
-    
-    async fn async_force_generate_data<T: Task + Send + Sync>(&self, task: &T, target: &str, additional_instructions: &Vec<String>) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let formatted_additional_instructions: String = format_additional_instructions(additional_instructions);
-        let request: CreateChatCompletionRequest = CreateChatCompletionRequestArgs::default()
-            .model(&self.access_model().to_string())
-            .messages(vec![
-                ChatCompletionRequestUserMessageArgs::default()
-                    .content(vec![
-                        ChatCompletionRequestMessageContentPartTextArgs::default()
-                            .text(
-                                task.get_system_prompt()
-                                    + &formatted_additional_instructions
-                                    + "\nThis is the basis for generating a json:\n"
-                                    + target,
-                            )
-                            .build()?
-                            .into(),
-                    ])
-                    .build()?
-                    .into(),
-            ])
-            .build()?;
 
-        let response: CreateChatCompletionResponse =
-            self.access_client()
-                .chat()
-                .create(request.clone())
-                .await
-                .map_err(|e| format!("Failed to execute function: {}", e))?;
+    async fn async_force_generate_data<T: Task + Send + Sync>(
+        &self,
+        task: &T,
+        target: &str,
+        additional_instructions: &Vec<String>,
+    ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let formatted_additional_instructions: String =
+            format_additional_instructions(additional_instructions);
 
-        if let Some(content) = response.choices[0].clone().message.content {
-            return Ok(surfing::serde::from_mixed_text(&content)?);
-        }
+        let request: Result<String, Box<dyn std::error::Error + Send + Sync>> = self
+            .async_send_message(
+                Message {
+                    role: "user".to_string(),
+                    content: format!(
+                        "{}{}\nThis is the basis for generating a json:\n{}",
+                        task.get_system_prompt(),
+                        formatted_additional_instructions,
+                        target
+                    ),
+                },
+                false,
+            )
+            .await;
 
-        return Err(SecretaryError::NoLLMResponse.into());
-    }
-}
+        let result: String = match request {
+            Ok(result) => {
+                let value: Value = serde_json::from_str(&result).unwrap();
+                value["choices"][0]["message"]["content"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            }
+            Err(error) => return Err(SecretaryError::BuildRequestError(error.to_string()).into()),
+        };
 
-/// Enables serialization of data structures to JSON format.
-///
-/// Useful for persistence and state transfer between service instances.
-/// Particularly valuable in web services where object lifetime management
-/// is important and state needs to be reconstructed from client responses.
-///
-/// This trait provides a simple interface for converting any type that implements
-/// `serde::Serialize` into a JSON string representation. It's designed to work
-/// alongside the complementary `FromJSON` trait for full serialization/deserialization
-/// capabilities.
-///
-/// # Examples
-///
-/// ```
-/// use secretary::traits::ToJSON;
-///
-/// #[derive(serde::Serialize)]
-/// struct User {
-///     name: String,
-///     email: String,
-/// }
-///
-/// impl ToJSON for User {}
-///
-/// fn main() -> anyhow::Result<()> {
-///     let user = User {
-///         name: "Alice".to_string(),
-///         email: "alice@example.com".to_string(),
-///     };
-///     
-///     let json = user.to_json()?;
-///     println!("{}", json); // Outputs: {"name":"Alice","email":"alice@example.com"}
-///     Ok(())
-/// }
-/// ```
-pub trait ToJSON
-where
-    Self: serde::Serialize + Sized,
-{
-    fn to_json(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        Ok(serde_json::to_string(self)?)
-    }
-}
-
-/// Enables creation of types from JSON string representation.
-///
-/// This trait provides deserialization capabilities complementary to
-/// the `ToJSON` trait. It's particularly useful for reconstructing
-/// objects from client-provided JSON data in web services or for
-/// loading persisted application state.
-///
-/// # Examples
-///
-/// ```
-/// use secretary::traits::FromJSON;
-///
-/// #[derive(serde::Deserialize)]
-/// struct User {
-///     name: String,
-///     email: String,
-/// }
-///
-/// impl FromJSON for User {}
-///
-/// fn main() -> anyhow::Result<()> {
-///     let json = r#"{"name":"Alice","email":"alice@example.com"}"#;
-///     let user = User::from_json(json)?;
-///     assert_eq!(user.name, "Alice");
-///     assert_eq!(user.email, "alice@example.com");
-///     Ok(())
-/// }
-/// ```
-pub trait FromJSON {
-    fn from_json(json: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>>
-    where
-        Self: for<'de> serde::Deserialize<'de> + Sized,
-    {
-        Ok(serde_json::from_str(json)?)
+        Ok(surfing::serde::from_mixed_text(&result)?)
     }
 }
 
@@ -331,6 +269,6 @@ fn format_additional_instructions(additional_instructions: &Vec<String>) -> Stri
             prompt.push_str(&format!("- {}\n", instruction));
         }
     }
-    
+
     prompt
 }

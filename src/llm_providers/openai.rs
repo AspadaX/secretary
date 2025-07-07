@@ -1,7 +1,10 @@
-use reqwest::Client;
-use serde_json::json;
+use serde_json::{json, Value};
 
-use crate::{constants::OPENAI_CHAT_COMPLETION_ROUTE, traits::{AsyncGenerateData, GenerateData, IsLLM, LLM}};
+use crate::{
+    constants::OPENAI_CHAT_COMPLETION_ROUTE,
+    message::Message,
+    traits::{AsyncGenerateData, GenerateData, IsLLM},
+};
 
 /// Represents a Large Language Model (LLM) that is compatible with OpenAI API.
 /// An LLM is the primary tool we use to convert unstructured data into structured data.
@@ -10,7 +13,6 @@ pub struct OpenAILLM {
     model: String,
     api_key: String,
     api_base: String,
-    client: Client,
 }
 
 impl OpenAILLM {
@@ -25,42 +27,52 @@ impl OpenAILLM {
     /// # Returns
     ///
     /// * `Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>>` - On success, returns an instance of the LLM struct. On failure, returns an Box<dyn std::error::Error + Send + Sync + 'static>.
-    pub fn new(api_base: &str, api_key: &str, model: &str) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let client: Client = Client::new();
-
+    pub fn new(
+        api_base: &str,
+        api_key: &str,
+        model: &str,
+    ) -> Result<Self, Box<dyn std::error::Error + Send + Sync + 'static>> {
         Ok(Self {
             model: model.to_string(),
             api_base: api_base.to_string(),
             api_key: api_key.to_string(),
-            client,
         })
     }
 }
 
 impl IsLLM for OpenAILLM {
-    fn send_message(&self, message: crate::message::Message) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let request = self.access_client()
-            .post(self.api_base + OPENAI_CHAT_COMPLETION_ROUTE)
-            .body(
-                json!(
-                    {
-                        "model": self.model,
-                        "messages": [
-                            message.to
-                        ]
-                    }
-                )
-            )
-            .send()
-            .await?
-    }
-    
-    fn access_client(&self) -> &Client {
-        &self.client
+    fn get_authorization_credentials(&self) -> (String, String) {
+        (
+            "Authorization".to_string(),
+            format!("Bearer {}", self.api_key),
+        )
     }
 
-    fn access_model(&self) -> &str {
+    fn get_model_ref(&self) -> &str {
         &self.model
+    }
+
+    fn get_chat_completion_request_url(&self) -> String {
+        format!("{}{}", self.api_base, OPENAI_CHAT_COMPLETION_ROUTE)
+    }
+
+    fn get_reqeust_body(&self, message: Message, return_json: bool) -> Value {
+        if return_json {
+            return json!(
+                {
+                    "model": self.get_model_ref(),
+                    "messages": [message],
+                    "response_format": {"type": "json_object"}
+                }
+            );
+        }
+
+        return json!(
+            {
+                "model": self.get_model_ref(),
+                "messages": [message],
+            }
+        );
     }
 }
 

@@ -1,6 +1,6 @@
+use secretary::Task;
 use secretary::llm_providers::openai::OpenAILLM;
 use secretary::traits::GenerateData;
-use secretary::Task;
 use serde::{Deserialize, Serialize};
 
 /// Example data structure for extracting financial report information
@@ -103,12 +103,12 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     )?;
 
     println!("Making sync force request to LLM (bypassing JSON mode requirement)...");
-    
+
     // Use force_generate_data instead of generate_data
     // This method works with reasoning models that don't support JSON mode
-    let result: FinancialReportExtraction = llm
-        .force_generate_data(&task, report_text, &additional_instructions)?;
-        
+    let result: FinancialReportExtraction =
+        llm.force_generate_data(&task, report_text, &additional_instructions)?;
+
     println!("Generated Data Structure: {:#?}", result);
 
     Ok(())
@@ -151,7 +151,7 @@ mod tests {
     #[test]
     fn test_data_model_instructions() {
         let data_model = FinancialReportExtraction::provide_data_model_instructions();
-        
+
         // Should provide a default instance for instructions
         assert_eq!(data_model.company_name, "");
         assert_eq!(data_model.fiscal_year, 0);
@@ -163,11 +163,11 @@ mod tests {
     fn test_force_generation_compatibility() {
         // Test that our struct works for force generation scenarios
         let task = FinancialReportExtraction::new();
-        
+
         // Verify the task can generate system prompts for force mode
         let prompt = task.get_system_prompt();
         assert!(!prompt.is_empty());
-        
+
         // Verify data model instructions work
         let instructions = FinancialReportExtraction::provide_data_model_instructions();
         assert_eq!(instructions.company_name, "");

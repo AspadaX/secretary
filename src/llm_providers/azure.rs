@@ -1,14 +1,21 @@
-use async_openai::Client;
-use async_openai::config::AzureConfig;
+use serde_json::{json, Value};
 
-use crate::traits::{AsyncGenerateData, GenerateData, IsLLM};
+use crate::{
+    constants::{
+        AZURE_OPENAI_API_VERSION_MARKER, AZURE_OPENAI_COMPLETION_ROUTE,
+        AZURE_OPENAI_DEPLOYMENT_ID_MARKER,
+    },
+    message::Message,
+    traits::{AsyncGenerateData, GenerateData, IsLLM},
+};
 
 /// Represents a Large Language Model (LLM) that is compatible with OpenAI API.
 /// An LLM is the primary tool we use to convert unstructured data into structured data.
 #[derive(Debug, Clone)]
 pub struct AzureOpenAILLM {
     model: String,
-    client: Client<AzureConfig>,
+    base_url: String,
+    api_key: String,
 }
 
 impl AzureOpenAILLM {
@@ -24,33 +31,48 @@ impl AzureOpenAILLM {
     /// # Returns
     ///
     /// * `Result<Self, Error>` - On success, returns an instance of the AzureOpenAILLM struct. On failure, returns an Box<dyn std::error::Error>.
-    pub fn new(
-        api_base: &str,
-        api_key: &str,
-        deployment_id: &str,
-        api_version: &str,
-    ) -> Self {
-        let llm_configuration: AzureConfig = AzureConfig::default()
-            .with_deployment_id(deployment_id)
-            .with_api_version(api_version)
-            .with_api_key(api_key)
-            .with_api_base(api_base);
-        let client: Client<AzureConfig> = async_openai::Client::with_config(llm_configuration);
-
+    pub fn new(api_base: &str, api_key: &str, deployment_id: &str, api_version: &str) -> Self {
+        let base_url: String = AZURE_OPENAI_COMPLETION_ROUTE
+            .replace(AZURE_OPENAI_COMPLETION_ROUTE, api_base)
+            .replace(AZURE_OPENAI_API_VERSION_MARKER, api_version)
+            .replace(AZURE_OPENAI_DEPLOYMENT_ID_MARKER, deployment_id);
+        
         Self {
             model: deployment_id.to_string(),
-            client,
+            base_url,
+            api_key: api_key.to_string(),
         }
     }
 }
 
 impl IsLLM for AzureOpenAILLM {
-    fn access_client(&self) -> &Client<impl async_openai::config::Config> {
-        &self.client
+    fn get_authorization_credentials(&self) -> (String, String) {
+        ("api-key".to_string(), self.base_url.clone())
     }
 
-    fn access_model(&self) -> &str {
+    fn get_model_ref(&self) -> &str {
         &self.model
+    }
+
+    fn get_chat_completion_request_url(&self) -> String {
+        self.base_url.clone()
+    }
+
+    fn get_reqeust_body(&self, message: Message, return_json: bool) -> Value {
+        if return_json {
+            return json!(
+                {
+                    "messages": [message],
+                    "response_format": {"type": "json_object"}
+                }
+            );
+        }
+
+        return json!(
+            {
+                "messages": [message],
+            }
+        );
     }
 }
 

@@ -1,6 +1,6 @@
+use secretary::Task;
 use secretary::llm_providers::openai::OpenAILLM;
 use secretary::traits::AsyncGenerateData;
-use secretary::Task;
 use serde::{Deserialize, Serialize};
 use tokio;
 
@@ -97,13 +97,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     )?;
 
     println!("Making async force request to LLM (bypassing JSON mode requirement)...");
-    
+
     // Use async_force_generate_data instead of async_generate_data
     // This method works with reasoning models that don't support JSON mode
     let result: ResearchPaperExtraction = llm
         .async_force_generate_data(&task, paper_text, &additional_instructions)
         .await?;
-        
+
     println!("Generated Data Structure: {:#?}", result);
 
     Ok(())
@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn test_data_model_instructions() {
         let data_model = ResearchPaperExtraction::provide_data_model_instructions();
-        
+
         // Should provide a default instance for instructions
         assert_eq!(data_model.title, "");
         assert_eq!(data_model.year, 0);
@@ -161,7 +161,7 @@ mod tests {
 
         // Task should work in async context
         assert_eq!(task.title, "");
-        
+
         // Verify the task can generate system prompts for force mode
         let prompt = task.get_system_prompt();
         assert!(!prompt.is_empty());
