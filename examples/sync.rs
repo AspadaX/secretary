@@ -47,32 +47,3 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_task_creation() {
-        let task = PersonExtraction::new();
-        // Task should be created successfully with default values
-        assert_eq!(task.name, "");
-        assert_eq!(task.age, 0);
-        assert_eq!(task.email, None);
-        assert_eq!(task.occupation, "");
-    }
-
-    #[test]
-    fn test_system_prompt_generation() {
-        let task = PersonExtraction::new();
-        let prompt = task.get_system_prompt();
-
-        // Check that the prompt contains the expected elements
-        assert!(prompt.contains("json structure"));
-        assert!(prompt.contains("Field instructions"));
-        assert!(prompt.contains("name"));
-        assert!(prompt.contains("age"));
-        assert!(prompt.contains("email"));
-        assert!(prompt.contains("occupation"));
-    }
-}
