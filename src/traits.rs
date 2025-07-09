@@ -387,7 +387,29 @@ where
             let mut distributed_tasks = Vec::new();
             for (field_name, message) in messages {
                 let handler = s.spawn(move || {
-                    let result: String = self.send_message(message, false).unwrap();
+                    let raw_result: String = self.send_message(message, false).unwrap();
+                    let value: Value = serde_json::from_str(&raw_result).unwrap();
+                    let content: String = value["choices"][0]["message"]["content"].as_str().unwrap().to_string();
+                    
+                    let mut is_thinking: bool = false;
+                    let mut result: String = String::new();
+                    for line in content.lines() {
+                        if !is_thinking {
+                            result.push_str(line);
+                        }
+                        
+                        if line.trim() == "<think>" {
+                            is_thinking = true;
+                            continue;
+                        }
+                        
+                        if line.trim() == "</think>" {
+                            is_thinking = false;
+                            continue;
+                        }
+                        
+                    }
+                    
                     (field_name, result)
                 });
                 
@@ -405,7 +427,6 @@ where
             distributed_tasks_results
         });
         
-        dbg!(&distributed_tasks_results);
         Ok(generate_from_tuples!(T, distributed_tasks_results))
     }
 }
