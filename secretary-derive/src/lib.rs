@@ -2,8 +2,13 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
-/// Derive macro that implements the Task trait for a struct.
+/// Derive macro that implements the Task trait for a struct,
 /// allowing users to directly use their data structures with LLM generation.
+/// 
+/// This macro automatically implements:
+/// - The `Task` trait with system prompt generation
+/// - The `Default` trait for easy instantiation
+/// - A `new()` constructor method
 ///
 /// # Example
 ///
@@ -18,6 +23,8 @@ use syn::{Data, DeriveInput, Fields, parse_macro_input};
 ///     #[task(instruction = "Extract the age as a number")]
 ///     age: u32,
 /// }
+/// 
+/// let task = MyData::new(); 
 /// ```
 #[proc_macro_derive(Task, attributes(task))]
 pub fn derive_task(input: TokenStream) -> TokenStream {

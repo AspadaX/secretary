@@ -136,7 +136,7 @@ pub trait IsLLM {
 /// use secretary::Task;
 /// use serde::{Serialize, Deserialize};
 /// 
-/// #[derive(Task, Serialize, Deserialize, Debug, Default)]
+/// #[derive(Task, Serialize, Deserialize, Debug)]
 /// struct PersonInfo {
 ///     #[task(instruction = "Extract the person's full name")]
 ///     pub name: String,
@@ -189,7 +189,7 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
 /// use secretary::traits::GenerateData;
 /// use serde::{Serialize, Deserialize};
 /// 
-/// #[derive(Task, Serialize, Deserialize, Debug, Default)]
+/// #[derive(Task, Serialize, Deserialize, Debug)]
 /// struct ProductInfo {
 ///     #[task(instruction = "Extract the product name")]
 ///     pub name: String,
@@ -292,13 +292,13 @@ where
      /// # use secretary::traits::GenerateData;
      /// # use serde::{Serialize, Deserialize};
      /// # 
-     /// # #[derive(Task, Serialize, Deserialize, Debug, Default)]
-     /// # struct ProductInfo {
-     /// #     #[task(instruction = "Extract the product name")]
-     /// #     pub name: String,
-     /// #     #[task(instruction = "Extract price as a number")]
-     /// #     pub price: f64,
-     /// # }
+     /// # #[derive(Task, Serialize, Deserialize, Debug)]
+/// # struct ProductInfo {
+/// #     #[task(instruction = "Extract the product name")]
+/// #     pub name: String,
+/// #     #[task(instruction = "Extract price as a number")]
+/// #     pub price: f64,
+/// # }
      /// # 
      /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
      /// // For reasoning models like o1-preview
@@ -363,7 +363,7 @@ where
 /// use secretary::traits::AsyncGenerateData;
 /// use serde::{Deserialize, Serialize};
 /// 
-/// #[derive(Task, Debug, Serialize, Deserialize, Default)]
+/// #[derive(Task, Debug, Serialize, Deserialize)]
 /// struct ProductInfo {
 ///     #[task(instruction = "Extract the product name")]
 ///     pub name: String,
@@ -477,13 +477,13 @@ where
      /// # use secretary::traits::AsyncGenerateData;
      /// # use serde::{Serialize, Deserialize};
      /// # 
-     /// # #[derive(Task, Serialize, Deserialize, Debug, Default)]
-     /// # struct ProductInfo {
-     /// #     #[task(instruction = "Extract the product name")]
-     /// #     pub name: String,
-     /// #     #[task(instruction = "Extract price as a number")]
-     /// #     pub price: f64,
-     /// # }
+     /// # #[derive(Task, Serialize, Deserialize, Debug)]
+/// # struct ProductInfo {
+/// #     #[task(instruction = "Extract the product name")]
+/// #     pub name: String,
+/// #     #[task(instruction = "Extract price as a number")]
+/// #     pub price: f64,
+/// # }
      /// # 
      /// # #[tokio::main]
      /// # async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
