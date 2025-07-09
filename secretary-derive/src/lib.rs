@@ -122,8 +122,8 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
                 prompt
             }
             
-            fn get_system_prompts_for_distributed_generation(&self) -> Vec<DistributedGenerationPrompt> {
-                let mut prompts: Vec<DistributedGenerationPrompt> = Vec::new();
+            fn get_system_prompts_for_distributed_generation(&self) -> Vec<(String, String)> {
+                let mut prompts: Vec<(String, String)> = Vec::new();
 
                 let field_map: std::collections::HashMap<&str, &str> = [
                     #(#field_instructions),*
@@ -136,10 +136,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
                     prompt.push_str(&format!("- {}: {}\n", field, instruction));
                     
                     prompts.push(
-                        DistributedGenerationPrompt {
-                            field_name: field.to_string(),
-                            prompt: prompt,
-                        }
+                        (field.to_string(), prompt)
                     );
                 }
 

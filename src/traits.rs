@@ -1,3 +1,5 @@
+use std::panic;
+
 use async_trait::async_trait;
 use reqwest::{
     Response,
@@ -9,8 +11,9 @@ use serde_json::Value;
 
 // Re-export the derive macro
 pub use secretary_derive::Task;
+use tokio::io::join;
 
-use crate::{distributions::DistributedGenerationPrompt, generate_from_tuples, message::Message, SecretaryError};
+use crate::{generate_from_tuples, message::Message, SecretaryError};
 
 /// Core trait for implementing LLM providers that are compatible with OpenAI-style APIs.
 ///
@@ -164,7 +167,7 @@ pub trait IsLLM {
 /// - A `new()` constructor method
 ///
 /// Use `#[task(instruction = "...")]` attributes on fields to provide extraction guidance.
-trait Task: Serialize + for<'de> Deserialize<'de> + Default {
+pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
     /// Generates a system prompt for the LLM based on the struct's field instructions.
     ///
     /// This method creates a comprehensive prompt that includes:
@@ -177,7 +180,9 @@ trait Task: Serialize + for<'de> Deserialize<'de> + Default {
     /// A formatted string containing the complete system prompt
     fn get_system_prompt(&self) -> String;
     
-    fn get_system_prompts_for_distributed_generation(&self) -> Vec<DistributedGenerationPrompt>;
+    /// # Returns:
+    /// a field name and a prompt
+    fn get_system_prompts_for_distributed_generation(&self) -> Vec<(String, String)>;
     
     /// Create a prompt that will be sending to the LLM for generating a structural data
     fn make_prompt(&self, target: &str, additional_instructions: &Vec<String>) -> Message {
@@ -199,12 +204,12 @@ trait Task: Serialize + for<'de> Deserialize<'de> + Default {
         for prompt in self.get_system_prompts_for_distributed_generation() {
             messages.push(
                 (
-                    prompt.field_name,
+                    prompt.0,
                     Message {
                         role: "user".to_string(),
                         content: format!(
                             "{}{}\nThis is the basis for generating the result:\n{}",
-                            prompt.prompt,
+                            prompt.1,
                             format_additional_instructions(additional_instructions),
                             target
                         ),
@@ -378,24 +383,30 @@ where
     ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let messages: Vec<(String, Message)> = task.make_dstributed_generation_prompts(target, additional_instructions);
         
-        let mut distributed_tasks = Vec::new();
-        for (field_name, message) in messages {
-            let handler = std::thread::spawn(move || {
-                let result = self.send_message(message, false).unwrap();
-                (field_name, result)
-            });
-            distributed_tasks.push(handler);
-        }
-        
-        let mut distributed_tasks_results: Vec<(String, String)> = Vec::new();
-        for distributed_task in distributed_tasks {
-            match distributed_task.join() {
-                Ok(result) => distributed_tasks_results.push(result),
-                Err(error) => return Err(Box::new(SecretaryError::NoLLMResponse))
+        let distributed_tasks_results: Vec<(String, String)> = std::thread::scope(|s|{
+            let mut distributed_tasks = Vec::new();
+            for (field_name, message) in messages {
+                let handler = s.spawn(move || {
+                    let result: String = self.send_message(message, false).unwrap();
+                    (field_name, result)
+                });
+                
+                distributed_tasks.push(handler);
             }
-        }
+            
+            let mut distributed_tasks_results: Vec<(String, String)> = Vec::new();
+            for distributed_task in distributed_tasks {
+                match distributed_task.join() {
+                    Ok(result) => distributed_tasks_results.push(result),
+                    Err(_) => panic!()
+                }
+            }
+            
+            distributed_tasks_results
+        });
         
-        Ok(generate_from_tuples!(T::default(), distributed_tasks_results))
+        dbg!(&distributed_tasks_results);
+        Ok(generate_from_tuples!(T, distributed_tasks_results))
     }
 }
 
