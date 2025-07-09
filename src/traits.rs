@@ -54,10 +54,9 @@ pub trait IsLLM {
         message: Message,
         return_json: bool,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let authorization_credentials: (String, String) = self.get_authorization_credentials();
         let request: reqwest::blocking::Response = reqwest::blocking::Client::new()
             .post(self.get_chat_completion_request_url())
-            .header(AUTHORIZATION, authorization_credentials.1)
+            .header(AUTHORIZATION, self.get_authorization_credentials())
             .header(CONTENT_TYPE, "application/json")
             .json(&self.get_reqeust_body(message, return_json))
             .send()?;
@@ -80,10 +79,9 @@ pub trait IsLLM {
         message: Message,
         return_json: bool,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let authorization_credentials: String = self.get_authorization_credentials();
         let request: Response = reqwest::Client::new()
             .post(self.get_chat_completion_request_url())
-            .header(AUTHORIZATION, authorization_credentials.1)
+            .header(AUTHORIZATION, self.get_authorization_credentials())
             .header(CONTENT_TYPE, "application/json")
             .json(&self.get_reqeust_body(message, return_json))
             .send()
@@ -443,7 +441,6 @@ where
 
         let result = match request {
             Ok(result) => {
-                dbg!(&result);
                 let value: Value = serde_json::from_str(&result).unwrap();
                 value["choices"][0]["message"]["content"]
                     .as_str()
