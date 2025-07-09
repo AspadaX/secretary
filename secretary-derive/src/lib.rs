@@ -2,8 +2,13 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
-/// Derive macro that implements the Task trait for a struct.
+/// Derive macro that implements the Task trait for a struct,
 /// allowing users to directly use their data structures with LLM generation.
+/// 
+/// This macro automatically implements:
+/// - The `Task` trait with system prompt generation
+/// - The `Default` trait for easy instantiation
+/// - A `new()` constructor method
 ///
 /// # Example
 ///
@@ -18,6 +23,8 @@ use syn::{Data, DeriveInput, Fields, parse_macro_input};
 ///     #[task(instruction = "Extract the age as a number")]
 ///     age: u32,
 /// }
+/// 
+/// let task = MyData::new(); 
 /// ```
 #[proc_macro_derive(Task, attributes(task))]
 pub fn derive_task(input: TokenStream) -> TokenStream {
@@ -25,13 +32,22 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
     let name: &syn::Ident = &input.ident;
 
     // Extract field information for generating instructions
-    let fields = match &input.data {
+    let fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma> = match &input.data {
         Data::Struct(data) => match &data.fields {
             Fields::Named(fields) => &fields.named,
             _ => panic!("Task can only be derived for structs with named fields"),
         },
         _ => panic!("Task can only be derived for structs"),
     };
+    
+    let field_defaults: Vec<_> = fields.iter()
+        .map(|field| {
+            let field_name: &syn::Ident = field.ident.as_ref().unwrap();
+            quote!{
+                #field_name: Default::default()
+            }
+        })
+        .collect();
 
     // Generate field instructions from attributes or field names
     let field_instructions: Vec<_> = fields
@@ -103,6 +119,14 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
                 }
 
                 prompt
+            }
+        }
+        
+        impl Default for #name {
+            fn default() -> Self {
+                Self {
+                    #(#field_defaults),*
+                }
             }
         }
     };

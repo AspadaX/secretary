@@ -54,10 +54,9 @@ pub trait IsLLM {
         message: Message,
         return_json: bool,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let authorization_credentials: (String, String) = self.get_authorization_credentials();
         let request: reqwest::blocking::Response = reqwest::blocking::Client::new()
             .post(self.get_chat_completion_request_url())
-            .header(AUTHORIZATION, authorization_credentials.1)
+            .header(AUTHORIZATION, self.get_authorization_credentials())
             .header(CONTENT_TYPE, "application/json")
             .json(&self.get_reqeust_body(message, return_json))
             .send()?;
@@ -80,10 +79,9 @@ pub trait IsLLM {
         message: Message,
         return_json: bool,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let authorization_credentials: (String, String) = self.get_authorization_credentials();
         let request: Response = reqwest::Client::new()
             .post(self.get_chat_completion_request_url())
-            .header(AUTHORIZATION, authorization_credentials.1)
+            .header(AUTHORIZATION, self.get_authorization_credentials())
             .header(CONTENT_TYPE, "application/json")
             .json(&self.get_reqeust_body(message, return_json))
             .send()
@@ -97,7 +95,7 @@ pub trait IsLLM {
     /// # Returns
     /// 
     /// A tuple of (header_name, header_value) for authentication
-    fn get_authorization_credentials(&self) -> (String, String);
+    fn get_authorization_credentials(&self) -> String;
 
     /// Constructs the request body for the LLM API call.
     /// 
@@ -138,7 +136,7 @@ pub trait IsLLM {
 /// use secretary::Task;
 /// use serde::{Serialize, Deserialize};
 /// 
-/// #[derive(Task, Serialize, Deserialize, Debug, Default)]
+/// #[derive(Task, Serialize, Deserialize, Debug)]
 /// struct PersonInfo {
 ///     #[task(instruction = "Extract the person's full name")]
 ///     pub name: String,
@@ -191,7 +189,7 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
 /// use secretary::traits::GenerateData;
 /// use serde::{Serialize, Deserialize};
 /// 
-/// #[derive(Task, Serialize, Deserialize, Debug, Default)]
+/// #[derive(Task, Serialize, Deserialize, Debug)]
 /// struct ProductInfo {
 ///     #[task(instruction = "Extract the product name")]
 ///     pub name: String,
@@ -294,13 +292,13 @@ where
      /// # use secretary::traits::GenerateData;
      /// # use serde::{Serialize, Deserialize};
      /// # 
-     /// # #[derive(Task, Serialize, Deserialize, Debug, Default)]
-     /// # struct ProductInfo {
-     /// #     #[task(instruction = "Extract the product name")]
-     /// #     pub name: String,
-     /// #     #[task(instruction = "Extract price as a number")]
-     /// #     pub price: f64,
-     /// # }
+     /// # #[derive(Task, Serialize, Deserialize, Debug)]
+/// # struct ProductInfo {
+/// #     #[task(instruction = "Extract the product name")]
+/// #     pub name: String,
+/// #     #[task(instruction = "Extract price as a number")]
+/// #     pub price: f64,
+/// # }
      /// # 
      /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
      /// // For reasoning models like o1-preview
@@ -365,7 +363,7 @@ where
 /// use secretary::traits::AsyncGenerateData;
 /// use serde::{Deserialize, Serialize};
 /// 
-/// #[derive(Task, Debug, Serialize, Deserialize, Default)]
+/// #[derive(Task, Debug, Serialize, Deserialize)]
 /// struct ProductInfo {
 ///     #[task(instruction = "Extract the product name")]
 ///     pub name: String,
@@ -443,7 +441,6 @@ where
 
         let result = match request {
             Ok(result) => {
-                dbg!(&result);
                 let value: Value = serde_json::from_str(&result).unwrap();
                 value["choices"][0]["message"]["content"]
                     .as_str()
@@ -480,13 +477,13 @@ where
      /// # use secretary::traits::AsyncGenerateData;
      /// # use serde::{Serialize, Deserialize};
      /// # 
-     /// # #[derive(Task, Serialize, Deserialize, Debug, Default)]
-     /// # struct ProductInfo {
-     /// #     #[task(instruction = "Extract the product name")]
-     /// #     pub name: String,
-     /// #     #[task(instruction = "Extract price as a number")]
-     /// #     pub price: f64,
-     /// # }
+     /// # #[derive(Task, Serialize, Deserialize, Debug)]
+/// # struct ProductInfo {
+/// #     #[task(instruction = "Extract the product name")]
+/// #     pub name: String,
+/// #     #[task(instruction = "Extract price as a number")]
+/// #     pub price: f64,
+/// # }
      /// # 
      /// # #[tokio::main]
      /// # async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {

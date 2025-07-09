@@ -46,8 +46,8 @@ impl AzureOpenAILLM {
 }
 
 impl IsLLM for AzureOpenAILLM {
-    fn get_authorization_credentials(&self) -> (String, String) {
-        ("api-key".to_string(), self.api_key.clone())
+    fn get_authorization_credentials(&self) -> String {
+        self.api_key.clone()
     }
 
     fn get_model_ref(&self) -> &str {

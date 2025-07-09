@@ -32,7 +32,7 @@ use secretary::traits::GenerateData;
 use serde::{Serialize, Deserialize};
 
 // Define your data structure with extraction instructions
-#[derive(Task, Serialize, Deserialize, Debug, Default)]
+#[derive(Task, Serialize, Deserialize, Debug)]
 struct PersonInfo {
     // Data fields with specific extraction instructions
     #[task(instruction = "Extract the person's full name")]
@@ -80,7 +80,6 @@ fn main() -> anyhow::Result<()> {
 
 1. **Define Your Schema**: Create a Rust struct with `#[derive(Task)]` and field-level instructions
 2. **Annotate Fields**: Use `#[task(instruction = "...")]` to guide the LLM on how to extract each field
-3. **Automatic Implementation**: The derive macro implements all necessary traits (data model, system prompt generation)
 4. **Create Task Instance**: Initialize with `YourStruct::new()`
 5. **Process Text**: Send natural language input to an LLM through the Secretary API with additional instructions
 6. **Get Structured Data**: Receive structured data parsed into your struct
@@ -90,7 +89,7 @@ fn main() -> anyhow::Result<()> {
 The `#[task(instruction = "...")]` attribute tells the LLM how to extract each field:
 
 ```rust
-#[derive(Task, Serialize, Deserialize, Debug, Default)]
+#[derive(Task, Serialize, Deserialize, Debug)]
 struct ProductInfo {
     #[task(instruction = "Extract the product name or title")]
     pub name: String,
@@ -328,7 +327,10 @@ The `secretary-derive` crate provides procedural macros for automatic trait impl
 The derive macro generates:
 - JSON schema definitions based on your struct fields
 - System prompts that include field instructions
+- Automatic `Default` trait implementation (no manual derive needed)
 - Default implementations for the `Task` trait
+
+**Note**: As of version 0.3.70, the `Default` trait is automatically implemented by the derive macro. You no longer need to include `Default` in your derive list. If you're upgrading from a previous version, simply remove `Default` from your `#[derive(...)]` declarations.
 
 ## Troubleshooting
 
