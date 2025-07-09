@@ -3,7 +3,7 @@ use secretary::traits::{GenerateData, Task};
 use serde::{Deserialize, Serialize};
 
 /// Example data structure using the Task derive macro
-#[derive(Task, Serialize, Deserialize, Debug, Default)]
+#[derive(Task, Serialize, Deserialize, Debug)]
 struct PersonExtraction {
     /// Data fields with extraction instructions
     #[task(instruction = "Extract the person's full name from the text")]

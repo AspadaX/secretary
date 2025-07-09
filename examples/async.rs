@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tokio;
 
 /// Example data structure for extracting product information
-#[derive(Task, Serialize, Deserialize, Debug, Default)]
+#[derive(Task, Serialize, Deserialize, Debug)]
 struct ProductExtraction {
     /// Product data fields with specific extraction instructions
     #[task(instruction = "Extract the product name or title")]

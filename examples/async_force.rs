@@ -6,7 +6,7 @@ use tokio;
 
 /// Example data structure for extracting research paper information
 /// This example demonstrates force generation for LLMs without JSON mode support
-#[derive(Task, Serialize, Deserialize, Debug, Default)]
+#[derive(Task, Serialize, Deserialize, Debug)]
 struct ResearchPaperExtraction {
     /// Research paper data fields with specific extraction instructions
     #[task(instruction = "Extract the title of the research paper")]

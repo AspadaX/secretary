@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// Example data structure for extracting financial report information
 /// This example demonstrates force generation for LLMs without JSON mode support
-#[derive(Task, Serialize, Deserialize, Debug, Default)]
+#[derive(Task, Serialize, Deserialize, Debug)]
 struct FinancialReportExtraction {
     /// Financial report data fields with specific extraction instructions
     #[task(instruction = "Extract the company name")]
