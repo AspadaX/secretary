@@ -41,11 +41,8 @@ impl OpenAILLM {
 }
 
 impl IsLLM for OpenAILLM {
-    fn get_authorization_credentials(&self) -> (String, String) {
-        (
-            "Authorization".to_string(),
-            format!("Bearer {}", self.api_key),
-        )
+    fn get_authorization_credentials(&self) -> String {
+        format!("Bearer {}", self.api_key)
     }
 
     fn get_model_ref(&self) -> &str {

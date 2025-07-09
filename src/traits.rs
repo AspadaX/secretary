@@ -80,7 +80,7 @@ pub trait IsLLM {
         message: Message,
         return_json: bool,
     ) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let authorization_credentials: (String, String) = self.get_authorization_credentials();
+        let authorization_credentials: String = self.get_authorization_credentials();
         let request: Response = reqwest::Client::new()
             .post(self.get_chat_completion_request_url())
             .header(AUTHORIZATION, authorization_credentials.1)
@@ -97,7 +97,7 @@ pub trait IsLLM {
     /// # Returns
     /// 
     /// A tuple of (header_name, header_value) for authentication
-    fn get_authorization_credentials(&self) -> (String, String);
+    fn get_authorization_credentials(&self) -> String;
 
     /// Constructs the request body for the LLM API call.
     /// 
