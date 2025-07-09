@@ -1,4 +1,4 @@
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::{
     constants::{
@@ -36,7 +36,7 @@ impl AzureOpenAILLM {
             .replace(AZURE_OPENAI_COMPLETION_ROUTE, api_base)
             .replace(AZURE_OPENAI_API_VERSION_MARKER, api_version)
             .replace(AZURE_OPENAI_DEPLOYMENT_ID_MARKER, deployment_id);
-        
+
         Self {
             model: deployment_id.to_string(),
             base_url,
