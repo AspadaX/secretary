@@ -192,7 +192,6 @@ let result: PersonInfo = llm.async_fields_generate_data(&task, input, &additiona
 
 **Benefits of Distributed Generation:**
 - **Improved accuracy**: Each field gets focused attention from the LLM
-- **Error isolation**: Failure in one field doesn't affect others
 - **Parallel processing**: Multiple fields extracted simultaneously
 - **Better for complex extractions**: Handles complex data structures more reliably
 
