@@ -132,7 +132,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
                 for (field, instruction) in field_map {
                     let mut prompt = String::new();
                     // Add field-specific instructions
-                    prompt.push_str("Output results according to criteria and wrap them in <result></result>.\n");
+                    prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
                     prompt.push_str(&format!("- {}: {}\n", field, instruction));
                     
                     prompts.push(

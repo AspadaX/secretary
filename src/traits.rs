@@ -1,6 +1,7 @@
 use std::panic;
 
 use async_trait::async_trait;
+use futures::future;
 use reqwest::{
     Response,
     header::{AUTHORIZATION, CONTENT_TYPE},
@@ -12,7 +13,7 @@ use serde_json::Value;
 // Re-export the derive macro
 pub use secretary_derive::Task;
 
-use crate::{generate_from_tuples, message::Message, utilities::cleanup_thinking_blocks, SecretaryError};
+use crate::{generate_from_tuples, message::Message, utilities::{cleanup_thinking_blocks, format_additional_instructions}, SecretaryError};
 
 /// Core trait for implementing LLM providers that are compatible with OpenAI-style APIs.
 ///
@@ -372,8 +373,79 @@ where
         Ok(surfing::serde::from_mixed_text(&result)?)
     }
     
-    /// Instead of generating a JSON in a single request. This method breaks a JSON down
-    /// into single fields for the LLM to generate. It will eventually putting them together to make a final JSON. 
+    /// Generates structured data by breaking down the task into individual field requests.
+    ///
+    /// Instead of generating a complete JSON object in a single request, this method breaks
+    /// the task down into individual field extractions. Each field is processed in parallel
+    /// using separate threads, and the results are combined into the final structured object.
+    /// This approach can improve accuracy for complex extractions and provides better error
+    /// isolation per field.
+    ///
+    /// # Benefits
+    ///
+    /// - **Improved accuracy**: Each field gets focused attention from the LLM
+    /// - **Parallel processing**: Multiple fields extracted simultaneously using threads
+    /// - **Error isolation**: Failure in one field doesn't affect others
+    /// - **Reasoning model support**: Works well with models that don't support JSON mode
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - A Task implementation that provides field-specific prompts
+    /// * `target` - The natural language text to extract data from
+    /// * `additional_instructions` - Extra instructions to guide the extraction process
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the extracted data as the specified type T
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use secretary::Task;
+    /// use secretary::llm_providers::openai::OpenAILLM;
+    /// use secretary::traits::GenerateData;
+    /// use serde::{Serialize, Deserialize};
+    ///
+    /// #[derive(Task, Serialize, Deserialize, Debug)]
+    /// struct PersonProfile {
+    ///     #[task(instruction = "Extract the person's full name")]
+    ///     pub name: String,
+    ///     #[task(instruction = "Extract age as a number")]
+    ///     pub age: u32,
+    ///     #[task(instruction = "Extract email address if mentioned")]
+    ///     pub email: Option<String>,
+    ///     #[task(instruction = "Extract job title or profession")]
+    ///     pub profession: Option<String>,
+    /// }
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    /// let llm = OpenAILLM::new(
+    ///     "https://api.openai.com/v1",
+    ///     "your-api-key",
+    ///     "gpt-4"
+    /// )?;
+    ///
+    /// let task = PersonProfile::new();
+    /// let additional_instructions = vec![
+    ///     "Be precise with personal information".to_string(),
+    ///     "Use null for missing information".to_string(),
+    /// ];
+    ///
+    /// let input = "John Smith is a 35-year-old software engineer. You can reach him at john.smith@email.com";
+    /// 
+    /// // Each field will be extracted in parallel
+    /// let result: PersonProfile = llm.fields_generate_data(&task, input, &additional_instructions)?;
+    ///
+    /// println!("Extracted profile: {:#?}", result);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Performance Considerations
+    ///
+    /// - **Thread overhead**: Creates one thread per field, so best for structs with moderate field counts
+    /// - **API calls**: Makes one API call per field, which may increase costs but improve accuracy
+    /// - **Parallel execution**: Faster than sequential field extraction for multi-field structs 
     fn fields_generate_data<T: Task>(
         &self,
         task: &T,
@@ -580,23 +652,110 @@ where
         Ok(surfing::serde::from_mixed_text(&result)?)
     }
     
-    async fn async_fields_generate_data<T: Task>(
+    /// Asynchronously generates structured data by breaking down the task into individual field requests.
+    ///
+    /// This is the async version of `fields_generate_data` that uses concurrent futures instead of threads.
+    /// Instead of generating a complete JSON object in a single request, this method breaks the task
+    /// down into individual field extractions. Each field is processed concurrently using async tasks,
+    /// and the results are combined into the final structured object.
+    ///
+    /// # Benefits
+    ///
+    /// - **Improved accuracy**: Each field gets focused attention from the LLM
+    /// - **Concurrent processing**: Multiple fields extracted simultaneously using async tasks
+    /// - **Error isolation**: Failure in one field doesn't affect others
+    /// - **Async-friendly**: Integrates seamlessly with async codebases
+    /// - **Resource efficient**: Uses async I/O instead of blocking threads
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - A Task implementation that provides field-specific prompts
+    /// * `target` - The natural language text to extract data from
+    /// * `additional_instructions` - Extra instructions to guide the extraction process
+    ///
+    /// # Returns
+    ///
+    /// A Result containing the extracted data as the specified type T
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use secretary::Task;
+    /// use secretary::llm_providers::openai::OpenAILLM;
+    /// use secretary::traits::AsyncGenerateData;
+    /// use serde::{Serialize, Deserialize};
+    ///
+    /// #[derive(Task, Serialize, Deserialize, Debug)]
+    /// struct CompanyInfo {
+    ///     #[task(instruction = "Extract the company name")]
+    ///     pub name: String,
+    ///     #[task(instruction = "Extract the founding year as a number")]
+    ///     pub founded: u32,
+    ///     #[task(instruction = "Extract the industry or sector")]
+    ///     pub industry: String,
+    ///     #[task(instruction = "Extract the headquarters location")]
+    ///     pub headquarters: Option<String>,
+    ///     #[task(instruction = "Extract the CEO or founder name")]
+    ///     pub ceo: Option<String>,
+    /// }
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
+    ///     let llm = OpenAILLM::new(
+    ///         "https://api.openai.com/v1",
+    ///         "your-api-key",
+    ///         "gpt-4"
+    ///     )?;
+    ///
+    ///     let task = CompanyInfo::new();
+    ///     let additional_instructions = vec![
+    ///         "Be precise with dates and numbers".to_string(),
+    ///         "Use null for missing information".to_string(),
+    ///     ];
+    ///
+    ///     let input = "Apple Inc. was founded in 1976 by Steve Jobs. The company is headquartered in Cupertino, California and operates in the technology sector.";
+    ///     
+    ///     // Each field will be extracted concurrently
+    ///     let result: CompanyInfo = llm.async_fields_generate_data(&task, input, &additional_instructions).await?;
+    ///
+    ///     println!("Extracted company info: {:#?}", result);
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # Performance Considerations
+    ///
+    /// - **Concurrent execution**: All field extractions happen simultaneously
+    /// - **API calls**: Makes one API call per field, which may increase costs but improve accuracy
+    /// - **Memory efficient**: Uses async tasks instead of OS threads
+    /// - **Early termination**: Stops all remaining requests if any field extraction fails
+    async fn async_fields_generate_data<T: Task + Sync + Send>(
         &self,
         task: &T,
         target: &str,
         additional_instructions: &Vec<String>,
-    ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {}
-}
-
-fn format_additional_instructions(additional_instructions: &Vec<String>) -> String {
-    let mut prompt: String = String::new();
-    // Add additional instructions
-    if !additional_instructions.is_empty() {
-        prompt.push_str("\nAdditional instructions:\n");
-        for instruction in additional_instructions {
-            prompt.push_str(&format!("- {}\n", instruction));
+    ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
+        let messages: Vec<(String, Message)> = task.make_dstributed_generation_prompts(target, additional_instructions);
+        
+        let mut distributed_tasks = Vec::new();
+        
+        for (field_name, message) in messages {
+            let task_future = async move {
+                let raw_result: String = self.async_send_message(message, false).await?;
+                let value: Value = serde_json::from_str(&raw_result).unwrap();
+                let content: String = value["choices"][0]["message"]["content"].as_str().unwrap().to_string();
+                
+                Ok::<(String, String), Box<dyn std::error::Error + Send + Sync>>((field_name, cleanup_thinking_blocks(content)))
+            };
+            
+            distributed_tasks.push(task_future);
         }
+        
+        let distributed_tasks_results: Result<Vec<(String, String)>, Box<dyn std::error::Error + Send + Sync + 'static>> = 
+             future::try_join_all(distributed_tasks).await;
+        
+        let distributed_tasks_results: Vec<(String, String)> = distributed_tasks_results?;
+        
+        Ok(generate_from_tuples!(T, distributed_tasks_results))
     }
-
-    prompt
 }

@@ -1,6 +1,6 @@
 [package]
 name = "secretary-derive"
-version = "0.3.70"
+version = "0.4.10"
 edition = "2024"
 description = "Procedural macros for the Secretary library - enables #[derive(Task)] for natural language to structured data transformation"
 authors = ["Xinyu Bao <baoxinyuworks@163.com>"]

@@ -5,18 +5,6 @@
 ///
 /// * `obj_type` - The type of object to create
 /// * `tuples` - A vector of tuples where each tuple contains a field name and the content for that field
-///
-/// # Example
-///
-/// ```
-/// #[derive(Debug, Serialize, Deserialize, Default)]
-/// struct MyStruct {
-///     my_field: String,
-/// }
-///
-/// let tuples = vec![("my_field".to_string(), "new_value".to_string())];
-/// let updated_obj = generate_from_tuples!(MyStruct, tuples);
-/// ```
 #[macro_export]
 macro_rules! generate_from_tuples {
     ($obj_type:ty, $tuples:expr) => {
