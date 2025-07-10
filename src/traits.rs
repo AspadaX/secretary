@@ -11,9 +11,8 @@ use serde_json::Value;
 
 // Re-export the derive macro
 pub use secretary_derive::Task;
-use tokio::io::join;
 
-use crate::{generate_from_tuples, message::Message, SecretaryError};
+use crate::{generate_from_tuples, message::Message, utilities::cleanup_thinking_blocks, SecretaryError};
 
 /// Core trait for implementing LLM providers that are compatible with OpenAI-style APIs.
 ///
@@ -391,26 +390,7 @@ where
                     let value: Value = serde_json::from_str(&raw_result).unwrap();
                     let content: String = value["choices"][0]["message"]["content"].as_str().unwrap().to_string();
                     
-                    let mut is_thinking: bool = false;
-                    let mut result: String = String::new();
-                    for line in content.lines() {
-                        if !is_thinking {
-                            result.push_str(line);
-                        }
-                        
-                        if line.trim() == "<think>" {
-                            is_thinking = true;
-                            continue;
-                        }
-                        
-                        if line.trim() == "</think>" {
-                            is_thinking = false;
-                            continue;
-                        }
-                        
-                    }
-                    
-                    (field_name, result)
+                    (field_name, cleanup_thinking_blocks(content))
                 });
                 
                 distributed_tasks.push(handler);
@@ -599,6 +579,13 @@ where
 
         Ok(surfing::serde::from_mixed_text(&result)?)
     }
+    
+    async fn async_fields_generate_data<T: Task>(
+        &self,
+        task: &T,
+        target: &str,
+        additional_instructions: &Vec<String>,
+    ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {}
 }
 
 fn format_additional_instructions(additional_instructions: &Vec<String>) -> String {

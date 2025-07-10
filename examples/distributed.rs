@@ -1,6 +1,5 @@
 use secretary::llm_providers::openai::OpenAILLM;
 use secretary::traits::{GenerateData, Task};
-use secretary::IsLLM;
 use serde::{Deserialize, Serialize};
 
 /// Example data structure using the Task derive macro
