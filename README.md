@@ -6,12 +6,35 @@
 
 **Secretary** is a Rust library that transforms natural language into structured data using large language models (LLMs). With its powerful derive macro system, you can extract structured information from unstructured text with minimal boilerplate code.
 
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [How It Works](#how-it-works)
+- [Field Instructions](#field-instructions)
+- [Advanced Features](#advanced-features)
+  - [Async Processing](#async-processing)
+  - [Distributed Field-Level Generation](#distributed-field-level-generation)
+  - [Multiple Extractions](#multiple-extractions)
+  - [Force Generation for Models Without a JSON Mode](#force-generation-for-models-without-a-json-mode)
+  - [System Prompt Generation](#system-prompt-generation)
+- [Examples](#examples)
+- [LLM Provider Setup](#llm-provider-setup)
+  - [OpenAI](#openai)
+  - [Azure OpenAI](#azure-openai)
+- [API Reference](#api-reference)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Features
 
 - 🚀 **Unified Task Trait**: Single trait combining data extraction, schema definition, and system prompt generation with `#[derive(Task)]`
 - 🔍 **Schema-Based Extraction**: Define your data structure using Rust structs with field-level instructions
 - 📋 **Declarative Field Instructions**: Use `#[task(instruction = "...")]` attributes to guide extraction
 - ⚡ **Async Support**: Built-in async/await support for concurrent processing
+- 🎯 **Distributed Generation**: Field-level extraction for improved accuracy and error isolation
 - 🧠 **Reasoning Model Support**: Force generation methods for models without JSON mode (o1, deepseek, etc.)
 - 🔌 **Multiple LLM Providers**: Supports OpenAI API and Azure OpenAI with extensible provider system
 - 🛡️ **Type Safety**: Leverage Rust's type system for reliable data extraction
@@ -153,6 +176,26 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
+### Distributed Field-Level Generation
+
+For improved accuracy and better error isolation, Secretary supports distributed generation where each field is extracted separately and then combined:
+
+```rust
+use secretary::traits::{GenerateData, AsyncGenerateData};
+
+// Synchronous distributed generation
+let result: PersonInfo = llm.fields_generate_data(&task, input, &additional_instructions)?;
+
+// Asynchronous distributed generation
+let result: PersonInfo = llm.async_fields_generate_data(&task, input, &additional_instructions).await?;
+```
+
+**Benefits of Distributed Generation:**
+- **Improved accuracy**: Each field gets focused attention from the LLM
+- **Error isolation**: Failure in one field doesn't affect others
+- **Parallel processing**: Multiple fields extracted simultaneously
+- **Better for complex extractions**: Handles complex data structures more reliably
+
 ### Multiple Extractions
 
 Process multiple inputs with the same task configuration:
@@ -215,6 +258,10 @@ The `examples/` directory contains practical demonstrations:
 - **`sync.rs`** - Basic person information extraction using synchronous API
 - **`async.rs`** - Async product information extraction with comprehensive testing
 
+### Distributed Generation
+- **`distributed.rs`** - Field-level distributed extraction using synchronous API
+- **`async_distributed.rs`** - Field-level distributed extraction using async API
+
 ### Force Generation (for Reasoning Models)
 - **`sync_force.rs`** - Financial report extraction using force generation for models without JSON mode
 - **`async_force.rs`** - Research paper extraction using async force generation for reasoning models
@@ -226,6 +273,10 @@ cargo run --example sync
 
 # Async example with comprehensive testing
 cargo run --example async
+
+# Distributed generation examples
+cargo run --example distributed
+cargo run --example async_distributed
 
 # Force generation examples (for o1, deepseek, etc.)
 cargo run --example sync_force
@@ -305,9 +356,9 @@ let llm = AzureOpenAILLM::new(&endpoint, &api_key, &deployment_id, &api_version)
 
 | Trait | Purpose | Key Methods |
 |-------|---------|-------------|
-| `Task` | Main trait for data extraction tasks | `get_system_prompt()` |
-| `GenerateData` | Synchronous LLM interaction | `generate_data()`, `force_generate_data()` |
-| `AsyncGenerateData` | Asynchronous LLM interaction | `async_generate_data()`, `async_force_generate_data()` |
+| `Task` | Main trait for data extraction tasks | `get_system_prompt()`, `get_system_prompts_for_distributed_generation()` |
+| `GenerateData` | Synchronous LLM interaction | `generate_data()`, `force_generate_data()`, `fields_generate_data()` |
+| `AsyncGenerateData` | Asynchronous LLM interaction | `async_generate_data()`, `async_force_generate_data()`, `async_fields_generate_data()` |
 | `IsLLM` | LLM provider abstraction | `send_message()`, `async_send_message()`, `get_authorization_credentials()` |
 
 ### LLM Providers
