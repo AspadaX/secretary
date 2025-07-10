@@ -4,6 +4,9 @@ pub mod llm_providers;
 pub mod message;
 pub mod traits;
 
+mod macros;
+mod utilities;
+
 // Re-export the main traits and derive macro for easy access
 pub use traits::{AsyncGenerateData, GenerateData, IsLLM, Task};
 

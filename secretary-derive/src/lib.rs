@@ -4,7 +4,7 @@ use syn::{Data, DeriveInput, Fields, parse_macro_input};
 
 /// Derive macro that implements the Task trait for a struct,
 /// allowing users to directly use their data structures with LLM generation.
-/// 
+///
 /// This macro automatically implements:
 /// - The `Task` trait with system prompt generation
 /// - The `Default` trait for easy instantiation
@@ -23,8 +23,8 @@ use syn::{Data, DeriveInput, Fields, parse_macro_input};
 ///     #[task(instruction = "Extract the age as a number")]
 ///     age: u32,
 /// }
-/// 
-/// let task = MyData::new(); 
+///
+/// let task = MyData::new();
 /// ```
 #[proc_macro_derive(Task, attributes(task))]
 pub fn derive_task(input: TokenStream) -> TokenStream {
@@ -39,11 +39,12 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
         },
         _ => panic!("Task can only be derived for structs"),
     };
-    
-    let field_defaults: Vec<_> = fields.iter()
+
+    let field_defaults: Vec<_> = fields
+        .iter()
         .map(|field| {
             let field_name: &syn::Ident = field.ident.as_ref().unwrap();
-            quote!{
+            quote! {
                 #field_name: Default::default()
             }
         })
@@ -120,8 +121,29 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
 
                 prompt
             }
+            
+            fn get_system_prompts_for_distributed_generation(&self) -> Vec<(String, String)> {
+                let mut prompts: Vec<(String, String)> = Vec::new();
+
+                let field_map: std::collections::HashMap<&str, &str> = [
+                    #(#field_instructions),*
+                ].iter().cloned().collect();
+
+                for (field, instruction) in field_map {
+                    let mut prompt = String::new();
+                    // Add field-specific instructions
+                    prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
+                    prompt.push_str(&format!("- {}: {}\n", field, instruction));
+                    
+                    prompts.push(
+                        (field.to_string(), prompt)
+                    );
+                }
+
+                prompts
+            }
         }
-        
+
         impl Default for #name {
             fn default() -> Self {
                 Self {
