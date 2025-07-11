@@ -16,18 +16,18 @@ pub fn cleanup_thinking_blocks(content: String) -> String {
     let mut is_thinking: bool = false;
     let mut result: String = String::new();
     let mut first_line = true;
-    
+
     for line in content.lines() {
         if line.trim() == "<think>" {
             is_thinking = true;
             continue;
         }
-        
+
         if line.trim() == "</think>" {
             is_thinking = false;
             continue;
         }
-        
+
         if !is_thinking {
             if !first_line {
                 result.push('\n');
@@ -36,7 +36,7 @@ pub fn cleanup_thinking_blocks(content: String) -> String {
             first_line = false;
         }
     }
-    
+
     result
 }
 

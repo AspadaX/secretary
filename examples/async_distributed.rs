@@ -60,7 +60,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
 
     // Display the generated system prompt
     println!("Generated System Prompt:");
-    println!("{:#?}", task.get_system_prompts_for_distributed_generation());
+    println!(
+        "{:#?}",
+        task.get_system_prompts_for_distributed_generation()
+    );
     println!();
 
     // Note: This would require actual API credentials to work

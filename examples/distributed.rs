@@ -42,7 +42,8 @@ fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
     )?;
 
     // Generate structured data using the task
-    let result: PersonExtraction = llm.fields_generate_data(&task, text, &additional_instructions)?;
+    let result: PersonExtraction =
+        llm.fields_generate_data(&task, text, &additional_instructions)?;
     println!("Generated data: {:#?}", result);
 
     Ok(())
