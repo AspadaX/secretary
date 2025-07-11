@@ -3,14 +3,9 @@ use secretary::traits::{AsyncGenerateData, Task};
 use serde::{Deserialize, Serialize};
 use tokio;
 
-/// Example data structure for extracting product information
 #[derive(Task, Serialize, Deserialize, Debug)]
-struct ProductExtraction {
-    /// Product data fields with specific extraction instructions
-    #[task(instruction = "Extract the product name or title")]
-    pub name: String,
-
-    #[task(instruction = "Extract the price as a number (without currency symbols)")]
+struct Details {
+    #[task(instruction = "Extract the price as a float")]
     pub price: f64,
 
     #[task(instruction = "Extract the product category or type")]
@@ -18,12 +13,23 @@ struct ProductExtraction {
 
     #[task(instruction = "Extract the brand name if mentioned")]
     pub brand: Option<String>,
+}
+
+/// Example data structure for extracting product information
+#[derive(Task, Serialize, Deserialize, Debug)]
+struct ProductExtraction {
+    /// Product data fields with specific extraction instructions
+    #[task(instruction = "Extract the product name or title")]
+    pub name: String,
 
     #[task(instruction = "Extract key features or description")]
     pub description: String,
 
     #[task(instruction = "Determine if the product is in stock (true/false)")]
     pub in_stock: bool,
+
+    #[task(instruction = "")]
+    pub details: Details,
 }
 
 /// Async example demonstrating the Task derive macro

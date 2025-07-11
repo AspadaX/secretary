@@ -2,6 +2,15 @@ use secretary::llm_providers::openai::OpenAILLM;
 use secretary::traits::{GenerateData, Task};
 use serde::{Deserialize, Serialize};
 
+#[derive(Task, Serialize, Deserialize, Debug)]
+struct Info {
+    #[task(instruction = "Extract the person's email address if mentioned")]
+    pub email: Option<String>,
+
+    #[task(instruction = "Extract the person's occupation or job title")]
+    pub occupation: String,
+}
+
 /// Example data structure using the Task derive macro
 #[derive(Task, Serialize, Deserialize, Debug)]
 struct PersonExtraction {
@@ -12,11 +21,8 @@ struct PersonExtraction {
     #[task(instruction = "Extract the person's age as a number")]
     pub age: u32,
 
-    #[task(instruction = "Extract the person's email address if mentioned")]
-    pub email: Option<String>,
-
-    #[task(instruction = "Extract the person's occupation or job title")]
-    pub occupation: String,
+    #[task(instruction = "")]
+    pub info: Info
 }
 
 /// Example showing how to use the derive macro

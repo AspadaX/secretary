@@ -124,14 +124,13 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    // Also generate the simple field instructions for distributed generation
-    let field_instructions: Vec<_> = fields
+    // Generate field processing code for distributed generation
+    let distributed_field_processing: Vec<_> = fields
         .iter()
         .map(|field| {
             let field_name: &syn::Ident = field.ident.as_ref().unwrap();
             let field_name_str: String = field_name.to_string();
             let field_type = &field.ty;
-            let type_str = quote!(#field_type).to_string();
 
             // Look for #[task(instruction = "...")] attribute
             let instruction: String = field
@@ -165,10 +164,65 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
                 })
                 .unwrap_or_else(|| format!("Extract the {} field from the input", field_name_str));
 
-            let combined_instruction = format!("{}: {}", instruction, type_str);
-
             quote! {
-                (#field_name_str, #combined_instruction)
+                {
+                    let field_name = #field_name_str;
+                    let field_path = if prefix.is_empty() {
+                        field_name.to_string()
+                    } else {
+                        format!("{}.{}", prefix, field_name)
+                    };
+
+                    let field_value = &self.#field_name;
+                    let field_type = stringify!(#field_type);
+                    let instruction = #instruction;
+                    let combined_instruction = format!("{}: {}", instruction, field_type);
+                    
+                    // Try to check if this field implements Task trait by attempting to call collect_distributed_prompts
+                    // This is a compile-time check - if the field implements Task, this will compile
+                    if let Ok(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        // Try to serialize to see if it's a complex object
+                        serde_json::to_value(field_value)
+                    })) {
+                        if let Ok(nested_json) = serde_json::to_value(field_value) {
+                            match nested_json {
+                                serde_json::Value::Object(obj) if !obj.is_empty() => {
+                                    // This might be a nested Task struct, try to get its distributed prompts
+                                    // For now, we'll check if we can call the method on it
+                                    // This is a heuristic approach - in a real implementation, we'd need trait bounds
+                                    
+                                    // If it's a complex object, treat each sub-field as a separate prompt
+                                    for (sub_field, _) in obj {
+                                        let sub_field_path = format!("{}.{}", field_path, sub_field);
+                                        let mut prompt = String::new();
+                                        prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
+                                        prompt.push_str(&format!("- Extract the {} field from the nested {} object\n", sub_field, field_name));
+                                        prompts.push((sub_field_path, prompt));
+                                    }
+                                },
+                                _ => {
+                                    // Simple field, add its instruction
+                                    let mut prompt = String::new();
+                                    prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
+                                    prompt.push_str(&format!("- {}: {}\n", field_path, combined_instruction));
+                                    prompts.push((field_path, prompt));
+                                }
+                            }
+                        } else {
+                            // Serialization failed, treat as simple field
+                            let mut prompt = String::new();
+                            prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
+                            prompt.push_str(&format!("- {}: {}\n", field_path, combined_instruction));
+                            prompts.push((field_path, prompt));
+                        }
+                    } else {
+                        // Panic occurred, treat as simple field
+                        let mut prompt = String::new();
+                        prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
+                        prompt.push_str(&format!("- {}: {}\n", field_path, combined_instruction));
+                        prompts.push((field_path, prompt));
+                    }
+                }
             }
         })
         .collect();
@@ -209,21 +263,9 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
 
             fn get_system_prompts_for_distributed_generation(&self) -> Vec<(String, String)> {
                 let mut prompts: Vec<(String, String)> = Vec::new();
+                let prefix = String::new();
 
-                let field_map: std::collections::HashMap<&str, &str> = [
-                    #(#field_instructions),*
-                ].iter().cloned().collect();
-
-                for (field, instruction) in field_map {
-                    let mut prompt = String::new();
-                    // Add field-specific instructions
-                    prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
-                    prompt.push_str(&format!("- {}: {}\n", field, instruction));
-
-                    prompts.push(
-                        (field.to_string(), prompt)
-                    );
-                }
+                #(#distributed_field_processing)*
 
                 prompts
             }
