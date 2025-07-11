@@ -64,7 +64,7 @@ pub trait IsLLM {
             .post(self.get_chat_completion_request_url())
             .header(AUTHORIZATION, self.get_authorization_credentials())
             .header(CONTENT_TYPE, "application/json")
-            .json(&self.get_reqeust_body(message, return_json))
+            .json(&self.get_request_body(message, return_json))
             .send()?;
 
         Ok(request.text()?)
@@ -89,7 +89,7 @@ pub trait IsLLM {
             .post(self.get_chat_completion_request_url())
             .header(AUTHORIZATION, self.get_authorization_credentials())
             .header(CONTENT_TYPE, "application/json")
-            .json(&self.get_reqeust_body(message, return_json))
+            .json(&self.get_request_body(message, return_json))
             .send()
             .await?;
 
@@ -113,7 +113,7 @@ pub trait IsLLM {
     /// # Returns
     ///
     /// JSON value representing the request body
-    fn get_reqeust_body(&self, message: Message, return_json: bool) -> Value;
+    fn get_request_body(&self, message: Message, return_json: bool) -> Value;
 
     /// Returns the complete URL for the chat completion endpoint.
     ///

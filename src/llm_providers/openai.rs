@@ -53,7 +53,7 @@ impl IsLLM for OpenAILLM {
         format!("{}{}", self.api_base, OPENAI_CHAT_COMPLETION_ROUTE)
     }
 
-    fn get_reqeust_body(&self, message: Message, return_json: bool) -> Value {
+    fn get_request_body(&self, message: Message, return_json: bool) -> Value {
         if return_json {
             return json!(
                 {
