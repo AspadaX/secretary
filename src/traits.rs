@@ -13,7 +13,11 @@ use serde_json::Value;
 // Re-export the derive macro
 pub use secretary_derive::Task;
 
-use crate::{generate_from_tuples, message::Message, utilities::{cleanup_thinking_blocks, format_additional_instructions}, SecretaryError};
+use crate::{
+    SecretaryError, generate_from_tuples,
+    message::Message,
+    utilities::{cleanup_thinking_blocks, format_additional_instructions},
+};
 
 /// Core trait for implementing LLM providers that are compatible with OpenAI-style APIs.
 ///
@@ -179,11 +183,11 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
     ///
     /// A formatted string containing the complete system prompt
     fn get_system_prompt(&self) -> String;
-    
+
     /// # Returns:
     /// a field name and a prompt
     fn get_system_prompts_for_distributed_generation(&self) -> Vec<(String, String)>;
-    
+
     /// Create a prompt that will be sending to the LLM for generating a structural data
     fn make_prompt(&self, target: &str, additional_instructions: &Vec<String>) -> Message {
         Message {
@@ -196,28 +200,30 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
             ),
         }
     }
-    
+
     /// Create a prompt that will be sending to the LLM for generating a structural data
-    fn make_dstributed_generation_prompts(&self, target: &str, additional_instructions: &Vec<String>) -> Vec<(String, Message)> {
+    fn make_dstributed_generation_prompts(
+        &self,
+        target: &str,
+        additional_instructions: &Vec<String>,
+    ) -> Vec<(String, Message)> {
         let mut messages: Vec<(String, Message)> = Vec::new();
-        
+
         for prompt in self.get_system_prompts_for_distributed_generation() {
-            messages.push(
-                (
-                    prompt.0,
-                    Message {
-                        role: "user".to_string(),
-                        content: format!(
-                            "{}{}\nThis is the basis for generating the result:\n{}",
-                            prompt.1,
-                            format_additional_instructions(additional_instructions),
-                            target
-                        ),
-                    }
-                )
-            );
+            messages.push((
+                prompt.0,
+                Message {
+                    role: "user".to_string(),
+                    content: format!(
+                        "{}{}\nThis is the basis for generating the result:\n{}",
+                        prompt.1,
+                        format_additional_instructions(additional_instructions),
+                        target
+                    ),
+                },
+            ));
         }
-        
+
         messages
     }
 }
@@ -292,10 +298,8 @@ where
         target: &str,
         additional_instructions: &Vec<String>,
     ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let request: String = self.send_message(
-            task.make_prompt(target, additional_instructions),
-            true,
-        )?;
+        let request: String =
+            self.send_message(task.make_prompt(target, additional_instructions), true)?;
 
         let value: Value = serde_json::from_str(&request).unwrap();
         let result = value["choices"][0]["message"]["content"]
@@ -359,10 +363,8 @@ where
         target: &str,
         additional_instructions: &Vec<String>,
     ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let response: String = self.send_message(
-            task.make_prompt(target, additional_instructions),
-            false,
-        )?;
+        let response: String =
+            self.send_message(task.make_prompt(target, additional_instructions), false)?;
 
         let value: Value = serde_json::from_str(&response).unwrap();
         let result: String = value["choices"][0]["message"]["content"]
@@ -372,7 +374,7 @@ where
 
         Ok(surfing::serde::from_mixed_text(&result)?)
     }
-    
+
     /// Generates structured data by breaking down the task into individual field requests.
     ///
     /// Instead of generating a complete JSON object in a single request, this method breaks
@@ -432,7 +434,7 @@ where
     /// ];
     ///
     /// let input = "John Smith is a 35-year-old software engineer. You can reach him at john.smith@email.com";
-    /// 
+    ///
     /// // Each field will be extracted in parallel
     /// let result: PersonProfile = llm.fields_generate_data(&task, input, &additional_instructions)?;
     ///
@@ -445,40 +447,45 @@ where
     ///
     /// - **Thread overhead**: Creates one thread per field, so best for structs with moderate field counts
     /// - **API calls**: Makes one API call per field, which may increase costs but improve accuracy
-    /// - **Parallel execution**: Faster than sequential field extraction for multi-field structs 
+    /// - **Parallel execution**: Faster than sequential field extraction for multi-field structs
     fn fields_generate_data<T: Task>(
         &self,
         task: &T,
         target: &str,
         additional_instructions: &Vec<String>,
     ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let messages: Vec<(String, Message)> = task.make_dstributed_generation_prompts(target, additional_instructions);
-        
-        let distributed_tasks_results: Vec<(String, String)> = std::thread::scope(|s|{
+        let messages: Vec<(String, Message)> =
+            task.make_dstributed_generation_prompts(target, additional_instructions);
+
+        let distributed_tasks_results: Vec<(String, String)> = std::thread::scope(|s| {
             let mut distributed_tasks = Vec::new();
             for (field_name, message) in messages {
                 let handler = s.spawn(move || {
                     let raw_result: String = self.send_message(message, false).unwrap();
                     let value: Value = serde_json::from_str(&raw_result).unwrap();
-                    let content: String = value["choices"][0]["message"]["content"].as_str().unwrap().to_string();
-                    
+                    let content: String = value["choices"][0]["message"]["content"]
+                        .as_str()
+                        .unwrap()
+                        .to_string();
+
                     (field_name, cleanup_thinking_blocks(content))
                 });
-                
+
                 distributed_tasks.push(handler);
             }
-            
+
             let mut distributed_tasks_results: Vec<(String, String)> = Vec::new();
             for distributed_task in distributed_tasks {
                 match distributed_task.join() {
                     Ok(result) => distributed_tasks_results.push(result),
-                    Err(_) => panic!()
+                    Err(_) => panic!(),
                 }
             }
-            
+
+
             distributed_tasks_results
         });
-        
+
         Ok(generate_from_tuples!(T, distributed_tasks_results))
     }
 }
@@ -556,10 +563,7 @@ where
         additional_instructions: &Vec<String>,
     ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let request: Result<String, Box<dyn std::error::Error + Send + Sync>> = self
-            .async_send_message(
-                task.make_prompt(target, additional_instructions),
-                true,
-            )
+            .async_send_message(task.make_prompt(target, additional_instructions), true)
             .await;
 
         let result = match request {
@@ -632,10 +636,7 @@ where
         additional_instructions: &Vec<String>,
     ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
         let request: Result<String, Box<dyn std::error::Error + Send + Sync>> = self
-            .async_send_message(
-                task.make_prompt(target, additional_instructions),
-                false,
-            )
+            .async_send_message(task.make_prompt(target, additional_instructions), false)
             .await;
 
         let result: String = match request {
@@ -651,7 +652,7 @@ where
 
         Ok(surfing::serde::from_mixed_text(&result)?)
     }
-    
+
     /// Asynchronously generates structured data by breaking down the task into individual field requests.
     ///
     /// This is the async version of `fields_generate_data` that uses concurrent futures instead of threads.
@@ -735,27 +736,36 @@ where
         target: &str,
         additional_instructions: &Vec<String>,
     ) -> Result<T, Box<dyn std::error::Error + Send + Sync + 'static>> {
-        let messages: Vec<(String, Message)> = task.make_dstributed_generation_prompts(target, additional_instructions);
-        
+        let messages: Vec<(String, Message)> =
+            task.make_dstributed_generation_prompts(target, additional_instructions);
+
         let mut distributed_tasks = Vec::new();
-        
+
         for (field_name, message) in messages {
             let task_future = async move {
                 let raw_result: String = self.async_send_message(message, false).await?;
                 let value: Value = serde_json::from_str(&raw_result).unwrap();
-                let content: String = value["choices"][0]["message"]["content"].as_str().unwrap().to_string();
-                
-                Ok::<(String, String), Box<dyn std::error::Error + Send + Sync>>((field_name, cleanup_thinking_blocks(content)))
+                let content: String = value["choices"][0]["message"]["content"]
+                    .as_str()
+                    .unwrap()
+                    .to_string();
+
+                Ok::<(String, String), Box<dyn std::error::Error + Send + Sync>>((
+                    field_name,
+                    cleanup_thinking_blocks(content),
+                ))
             };
-            
+
             distributed_tasks.push(task_future);
         }
-        
-        let distributed_tasks_results: Result<Vec<(String, String)>, Box<dyn std::error::Error + Send + Sync + 'static>> = 
-             future::try_join_all(distributed_tasks).await;
-        
+
+        let distributed_tasks_results: Result<
+            Vec<(String, String)>,
+            Box<dyn std::error::Error + Send + Sync + 'static>,
+        > = future::try_join_all(distributed_tasks).await;
+
         let distributed_tasks_results: Vec<(String, String)> = distributed_tasks_results?;
-        
+
         Ok(generate_from_tuples!(T, distributed_tasks_results))
     }
 }
