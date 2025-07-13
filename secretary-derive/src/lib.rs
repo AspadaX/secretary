@@ -189,7 +189,6 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
                                 serde_json::Value::Object(obj) if !obj.is_empty() => {
                                     // This might be a nested Task struct, try to get its distributed prompts
                                     // For now, we'll check if we can call the method on it
-                                    // This is a heuristic approach - in a real implementation, we'd need trait bounds
                                     
                                     // If it's a complex object, treat each sub-field as a separate prompt
                                     for (sub_field, _) in obj {
