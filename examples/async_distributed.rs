@@ -22,7 +22,7 @@ struct ProductExtraction {
     #[task(instruction = "Extract the product name or title")]
     pub name: String,
 
-    #[task(instruction = "Extract key features or description")]
+    #[task(instruction = "Extract the description")]
     pub description: String,
 
     #[task(instruction = "Determine if the product is in stock (true/false)")]

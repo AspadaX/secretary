@@ -10,18 +10,6 @@ macro_rules! generate_from_tuples {
     ($obj_type:ty, $tuples:expr) => {{
         use serde_json::{Map, Value};
 
-        // Helper function to extract content from <result></result> tags
-        fn extract_result_content(content: &str) -> String {
-            if let Some(start) = content.find("<result>") {
-                if let Some(end) = content.find("</result>") {
-                    if start < end {
-                        return content[start + 8..end].trim().to_string();
-                    }
-                }
-            }
-            content.trim().to_string()
-        }
-
         // Helper function to intelligently parse and clean values based on common patterns
         fn smart_parse_value(content: &str) -> Value {
             let cleaned = content.trim();
@@ -120,11 +108,8 @@ macro_rules! generate_from_tuples {
         let mut json_map = Map::new();
 
         for (field_name, content) in $tuples {
-            // Extract content from <result></result> tags if present
-            let cleaned_content = extract_result_content(&content);
-
             // Use smart parsing to handle various data types and formats
-            let value = smart_parse_value(&cleaned_content);
+            let value = smart_parse_value(&content);
 
             // Handle nested field paths
             set_nested_field(&mut json_map, &field_name, value);
