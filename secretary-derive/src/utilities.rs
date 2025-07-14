@@ -1,4 +1,3 @@
-use static_assertions::assert_impl_one;
 use syn::{Field, Type};
 
 use crate::field_mapping::FieldMapping;

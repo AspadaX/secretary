@@ -28,7 +28,6 @@ struct ProductExtraction {
     #[task(instruction = "Determine if the product is in stock (true/false)")]
     pub in_stock: bool,
 
-    #[task(instruction = "")]
     pub details: Details,
 }
 

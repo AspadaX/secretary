@@ -25,9 +25,11 @@ pub fn implement_default(name: &Ident, fields: &syn::punctuated::Punctuated<syn:
     }
 }
 
-pub fn implement_task(name: &Ident) -> TokenStream {
+pub fn implement_task(name: &Ident, trait_bounds: &proc_macro2::TokenStream, distributed_field_processing: &Vec<proc_macro2::TokenStream>) -> TokenStream {
     quote! {
-        impl ::secretary::traits::Task for #name {
+        impl ::secretary::traits::Task for #name 
+        #trait_bounds
+        {
             fn get_system_prompt(&self) -> String {
                 use serde_json::{Value, Map};
     

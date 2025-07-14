@@ -1,7 +1,11 @@
 mod utilities;
 mod field_mapping;
 mod implementations;
+mod errors;
+mod field;
 
+use errors::ValidationError;
+use field::{classify_field_type, validate_field_requirements, FieldCategory};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, parse_macro_input};
@@ -47,8 +51,46 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
         },
         _ => panic!("Task can only be derived for structs"),
     };
-
-    // Extract field mappings
+    
+    // Validate
+    if let Err(validation_error) = validate_field_requirements(fields) {
+        match validation_error {
+            ValidationError::PrimitiveMissingInstruction(field_name) => {
+                panic!(
+                    "Field '{}' is a primitive type and must have a #[task(instruction = \"...\")] attribute",
+                    field_name
+                );
+            },
+            ValidationError::TaskFieldWithInstruction(field_name) => {
+                panic!(
+                    "Field '{}' appears to be a Task struct and should NOT have an instruction attribute. \
+                        Task structs define their own instructions internally.",
+                    field_name
+                );
+            },
+            ValidationError::UnknownFieldType(field_name) => {
+                panic!(
+                    "Field '{}' has an unknown type. Only primitive types with instructions \
+                        or custom structs implementing Task are allowed.",
+                    field_name
+                );
+            },
+        }
+    }
+    
+    // Add `where` clause to fields with Task impl
+    let task_field_types: Vec<_> = fields.iter()
+        .filter(|field| classify_field_type(&field.ty) == FieldCategory::PotentialTask)
+        .map(|field| &field.ty)
+        .collect();
+    let trait_bounds: proc_macro2::TokenStream = if !task_field_types.is_empty() {
+        quote! {
+            where 
+                #(#task_field_types: ::secretary::traits::Task,)*
+        }
+    } else {
+        quote! {}
+    };
 
     // Generate field instructions and expansion logic for nested structs
     let field_expansions: Vec<_> = fields
@@ -200,7 +242,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
         .collect();
 
     expanded.extend(implement_default(&name, &fields));
-    expanded.extend(implement_task(&name));
+    expanded.extend(implement_task(&name, &trait_bounds, &distributed_field_processing));
     expanded.extend(quote! {
         impl #name {
             /// Create a new instance with additional instructions

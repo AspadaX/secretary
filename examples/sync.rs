@@ -21,7 +21,6 @@ struct PersonExtraction {
     #[task(instruction = "Extract the person's age as a number")]
     pub age: u32,
 
-    #[task(instruction = "")]
     pub info: Info
 }
 
