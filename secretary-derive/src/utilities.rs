@@ -1,7 +1,5 @@
 use syn::{Field, Type};
 
-use crate::field_mapping::FieldMapping;
-
 pub fn convert_to_json_type(rust_type: &Type) -> String {
     match rust_type {
         Type::Array(_) => format!("JSON Array"),
@@ -21,12 +19,8 @@ pub fn convert_to_json_type(rust_type: &Type) -> String {
             }
         },
         Type::Reference(reference) => convert_to_json_type(&reference.elem),
-        Type::Tuple(tuple) => {
-            if tuple.elems.is_empty() {
-                format!("JSON Object")
-            } else {
-                format!("JSON Array") // Rust tuples map to JSON arrays
-            }
+        Type::Tuple(_) => {
+            format!("JSON Array") // Rust tuples map to JSON arrays
         },
         _ => format!("JSON Null"), // Default case for unknown types
     }
@@ -63,30 +57,4 @@ pub fn get_field_instruction(field: &Field) -> Option<String> {
     }
     
     field_instruction
-}
-
-/// Extract the struct into a tree structure for easier manipulations
-pub fn get_field_mappings(fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma>) -> Vec<FieldMapping> {
-    let mut field_mappings: Vec<FieldMapping> = Vec::new();
-    
-    for field in fields.iter() {
-        let mut extracted_field_name: String = String::new();
-        let mut extracted_instruction: String = String::new();
-        let mut extracted_json_type: String = String::new();
-        
-        if let Some(field_name) = &field.ident {
-            extracted_field_name = field_name.to_string();
-            extracted_json_type = convert_to_json_type(&field.ty);
-        }
-        
-        if let Some(field_instruction) = get_field_instruction(field) {
-            extracted_instruction = field_instruction;
-        }
-        
-        field_mappings.push(
-            FieldMapping::new(extracted_field_name, extracted_instruction, extracted_json_type)
-        );
-    }
-    
-    field_mappings
 }

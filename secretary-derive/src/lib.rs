@@ -1,5 +1,4 @@
 mod utilities;
-mod field_mapping;
 mod implementations;
 mod errors;
 mod field;
@@ -140,6 +139,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
         .collect();
 
     // Generate field processing code for distributed generation
+    todo!();
     let distributed_field_processing: Vec<_> = fields
         .iter()
         .map(|field| {
