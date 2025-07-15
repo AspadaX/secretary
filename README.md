@@ -8,23 +8,38 @@
 
 ## Table of Contents
 
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [How It Works](#how-it-works)
-- [Field Instructions](#field-instructions)
-- [Advanced Features](#advanced-features)
-  - [Async Processing](#async-processing)
-  - [Distributed Field-Level Generation](#distributed-field-level-generation)
-  - [Multiple Extractions](#multiple-extractions)
-  - [Force Generation for Models Without a JSON Mode](#force-generation-for-models-without-a-json-mode)
-  - [System Prompt Generation](#system-prompt-generation)
-- [Examples](#examples)
-- [LLM Provider Setup](#llm-provider-setup)
-  - [OpenAI](#openai)
-  - [Azure OpenAI](#azure-openai)
-- [API Reference](#api-reference)
-- [Troubleshooting](#troubleshooting)
-- [Roadmap](#roadmap)
+- [Secretary](#secretary)
+  - [Table of Contents](#table-of-contents)
+    - [Basic Example](#basic-example)
+  - [How It Works](#how-it-works)
+    - [Field Instructions](#field-instructions)
+  - [Advanced Features](#advanced-features)
+    - [Async Processing](#async-processing)
+    - [Distributed Field-Level Generation](#distributed-field-level-generation)
+    - [Multiple Extractions](#multiple-extractions)
+    - [Force Generation for Models Without a JSON Mode](#force-generation-for-models-without-a-json-mode)
+    - [System Prompt Generation](#system-prompt-generation)
+  - [Examples](#examples)
+    - [Basic Usage](#basic-usage)
+    - [Distributed Generation](#distributed-generation)
+    - [Force Generation (for Reasoning Models)](#force-generation-for-reasoning-models)
+  - [LLM Provider Setup](#llm-provider-setup)
+    - [OpenAI](#openai)
+    - [Azure OpenAI](#azure-openai)
+  - [API Reference](#api-reference)
+    - [Core Traits](#core-traits)
+    - [LLM Providers](#llm-providers)
+    - [Derive Macro (secretary-derive)](#derive-macro-secretary-derive)
+  - [Error Handling](#error-handling)
+    - [`FieldDeserializationError`](#fielddeserializationerror)
+  - [Troubleshooting](#troubleshooting)
+    - [Common Issues](#common-issues)
+    - [Performance Tips](#performance-tips)
+  - [Roadmap](#roadmap)
+    - [Dependencies](#dependencies)
+  - [Contributing](#contributing)
+  - [License](#license)
+```- [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -175,11 +190,9 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 ```
-
 ### Distributed Field-Level Generation
 
-For improved accuracy and better error isolation, Secretary supports distributed generation where each field is extracted separately and then combined:
-
+For improved accuracy and better error isolation, Secretary supports distributed generation where each field is extracted separately and then combined. This approach is more resilient to failures in individual fields. If a field fails to deserialize, the system will now raise a `FieldDeserializationError`, pinpointing the exact issue without affecting the successfully extracted fields.
 ```rust
 use secretary::traits::{GenerateData, AsyncGenerateData};
 
@@ -382,6 +395,20 @@ The derive macro generates:
 
 **Note**: As of version 0.3.70, the `Default` trait is automatically implemented by the derive macro. You no longer need to include `Default` in your derive list. If you're upgrading from a previous version, simply remove `Default` from your `#[derive(...)]` declarations.
 
+## Error Handling
+
+`secretary` uses a comprehensive error enum, `SecretaryError`, to handle various issues that can arise during data extraction. A particularly important variant is `FieldDeserializationError`.
+
+### `FieldDeserializationError`
+
+This error occurs when the LLM returns data that cannot be deserialized into the target struct's field type (e.g., providing a string for a `u32` field). The error provides detailed context:
+
+- `failed_fields`: A list of fields that failed to deserialize.
+- `successful_fields`: A list of fields that were parsed correctly.
+- `original_error`: The underlying error from `serde_json`.
+
+This makes it much easier to debug issues, especially when using distributed generation.
+
 ## Troubleshooting
 
 ### Common Issues
@@ -395,6 +422,9 @@ The derive macro generates:
 - Ensure all data fields implement `Serialize` and `Deserialize`
 - Check that field types match the expected JSON structure
 - Verify that optional fields are properly handled
+- If you receive a `FieldDeserializationError`, check the following:
+  - The `instruction` for the failed field. It might not be specific enough.
+  - The data type of the field in your struct. It might not match what the LLM is returning.
 
 ### Performance Tips
 
@@ -405,10 +435,9 @@ The derive macro generates:
 
 ## Roadmap
 
-- [ ] Context-aware conversations and multi-turn interactions
 - [x] Azure OpenAI support (✅ Completed in v0.3.60)
 - [ ] Support for additional LLM providers (AWS, Anthropic, Cohere, etc.)
-- [ ] Enhanced error handling and validation
+- [X] Enhanced error handling and validation
 - [ ] Performance optimizations and caching
 - [ ] Integration with more serialization formats
 - [ ] Advanced prompt engineering features

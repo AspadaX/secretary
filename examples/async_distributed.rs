@@ -13,9 +13,9 @@ struct Details {
 
     #[task(instruction = "Extract the brand name if mentioned")]
     pub brand: Option<String>,
-    
+
     #[task(instruction = "Tag the product with English words")]
-    pub tags: Vec<String>
+    pub tags: Vec<String>,
 }
 
 /// Example data structure for extracting product information

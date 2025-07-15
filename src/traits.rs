@@ -14,7 +14,9 @@ use serde_json::Value;
 pub use secretary_derive::Task;
 
 use crate::{
-    generate_from_tuples, message::Message, utilities::{cleanup_thinking_blocks, extract_result_content, format_additional_instructions}, SecretaryError
+    SecretaryError, generate_from_tuples,
+    message::Message,
+    utilities::{cleanup_thinking_blocks, extract_result_content, format_additional_instructions},
 };
 
 /// Core trait for implementing LLM providers that are compatible with OpenAI-style APIs.
@@ -132,7 +134,7 @@ pub trait IsLLM {
     fn get_model_ref(&self) -> &str;
 }
 
-/// The main Task trait for defining data extraction schemas and system prompts.
+/// The main `Task` trait for defining data extraction schemas and system prompts.
 ///
 /// This trait should be implemented using the `#[derive(Task)]` macro for user-defined structs.
 /// It combines data model definition, system prompt generation, and serialization capabilities
@@ -169,6 +171,12 @@ pub trait IsLLM {
 /// - A `new()` constructor method
 ///
 /// Use `#[task(instruction = "...")]` attributes on fields to provide extraction guidance.
+///
+/// # Error Handling
+///
+/// Implementations of this trait should be mindful of potential deserialization errors.
+/// If the LLM returns data that does not match the expected schema (e.g., a string for a number field),
+/// a `SecretaryError::FieldDeserializationError` will be returned, detailing which fields failed.
 pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
     /// Generates a system prompt for the LLM based on the struct's field instructions.
     ///
@@ -179,14 +187,30 @@ pub trait Task: Serialize + for<'de> Deserialize<'de> + Default {
     ///
     /// # Returns
     ///
-    /// A formatted string containing the complete system prompt
+    /// A formatted string containing the complete system prompt.
     fn get_system_prompt(&self) -> String;
 
-    /// # Returns:
-    /// a field name and a prompt
+    /// Returns a list of field names and their corresponding system prompts for distributed generation.
+    ///
+    /// This method is used by `fields_generate_data` and `async_fields_generate_data` to
+    /// generate each field's value independently.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec` of tuples, where each tuple contains a field name and its system prompt.
     fn get_system_prompts_for_distributed_generation(&self) -> Vec<(String, String)>;
 
     /// Create a prompt that will be sending to the LLM for generating a structural data
+    /// Creates a `Message` object for the LLM, combining the system prompt, user input, and additional instructions.
+    ///
+    /// # Arguments
+    ///
+    /// * `target` - The natural language input to be processed.
+    /// * `additional_instructions` - A list of extra instructions to guide the LLM.
+    ///
+    /// # Returns
+    ///
+    /// A `Message` struct ready to be sent to the LLM.
     fn make_prompt(&self, target: &str, additional_instructions: &Vec<String>) -> Message {
         Message {
             role: "user".to_string(),
@@ -289,7 +313,7 @@ where
     /// Returns an error if:
     /// - The LLM API call fails
     /// - The response cannot be parsed as valid JSON
-    /// - The JSON doesn't match the expected schema
+    /// - The JSON doesn't match the expected schema, potentially returning a `FieldDeserializationError`.
     fn generate_data<T: Task>(
         &self,
         task: &T,
@@ -305,7 +329,10 @@ where
             .unwrap()
             .to_string();
 
-        Ok(serde_json::from_str::<T>(&result)?)
+        match serde_json::from_str::<T>(&result) {
+            Ok(result) => Ok(result),
+            Err(error) => Err(Box::new(SecretaryError::SerdeJsonError(error))),
+        }
     }
 
     /// Generates structured data from natural language without JSON mode (for reasoning models).
@@ -322,6 +349,10 @@ where
     /// # Returns
     ///
     /// A Result containing the extracted data as the specified type T
+    ///
+    /// # Errors
+    ///
+    /// Returns `SecretaryError` if the LLM response cannot be parsed into the target struct `T`.
     ///
     /// # Examples
     ///
@@ -370,7 +401,12 @@ where
             .unwrap()
             .to_string();
 
-        Ok(surfing::serde::from_mixed_text(&result)?)
+        match surfing::serde::from_mixed_text(&result) {
+            Ok(result) => Ok(result),
+            Err(error) => Err(Box::new(SecretaryError::JsonParsingError(
+                error.to_string(),
+            ))),
+        }
     }
 
     /// Generates structured data by breaking down the task into individual field requests.
@@ -446,6 +482,11 @@ where
     /// - **Thread overhead**: Creates one thread per field, so best for structs with moderate field counts
     /// - **API calls**: Makes one API call per field, which may increase costs but improve accuracy
     /// - **Parallel execution**: Faster than sequential field extraction for multi-field structs
+    ///
+    /// # Errors
+    ///
+    /// Returns `SecretaryError` if the final assembly of fields into the struct `T` fails.
+    /// This is particularly useful for catching `FieldDeserializationError`.
     fn fields_generate_data<T: Task>(
         &self,
         task: &T,
@@ -466,7 +507,10 @@ where
                         .unwrap()
                         .to_string();
 
-                    (field_name, extract_result_content(&cleanup_thinking_blocks(content)))
+                    (
+                        field_name,
+                        extract_result_content(&cleanup_thinking_blocks(content)),
+                    )
                 });
 
                 distributed_tasks.push(handler);
@@ -480,11 +524,28 @@ where
                 }
             }
 
-
             distributed_tasks_results
         });
 
-        Ok(generate_from_tuples!(T, distributed_tasks_results))
+        // Use panic::catch_unwind to handle potential FieldDeserializationError panics from the macro
+        match panic::catch_unwind(|| generate_from_tuples!(T, distributed_tasks_results)) {
+            Ok(result) => Ok(result),
+            Err(panic_payload) => {
+                // Try to extract the FieldDeserializationError from the panic
+                if let Some(error_msg) = panic_payload.downcast_ref::<String>() {
+                    // Parse the error message to reconstruct the FieldDeserializationError
+                    if error_msg.contains("Failed to deserialize") {
+                        return Err(Box::new(SecretaryError::JsonParsingError(
+                            error_msg.clone(),
+                        )));
+                    }
+                }
+                // Fallback for other panics
+                Err(Box::new(SecretaryError::JsonParsingError(
+                    "Field deserialization failed with unknown error".to_string(),
+                )))
+            }
+        }
     }
 }
 
@@ -550,10 +611,8 @@ where
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - The LLM API call fails
-    /// - The response cannot be parsed as valid JSON
-    /// - The JSON doesn't match the expected schema
+    /// Returns `SecretaryError` if the LLM response cannot be parsed into the target struct `T`,
+    /// including `FieldDeserializationError` if specific fields fail.
     async fn async_generate_data<T: Task + Sync + Send>(
         &self,
         task: &T,
@@ -575,7 +634,10 @@ where
             Err(error) => return Err(SecretaryError::BuildRequestError(error.to_string()).into()),
         };
 
-        Ok(serde_json::from_str(&result)?)
+        match serde_json::from_str::<T>(&result) {
+            Ok(result) => Ok(result),
+            Err(error) => Err(Box::new(SecretaryError::SerdeJsonError(error))),
+        }
     }
 
     /// Asynchronously generates structured data from natural language without JSON mode (for reasoning models).
@@ -627,6 +689,10 @@ where
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns `SecretaryError` if the LLM response cannot be parsed into the target struct `T`.
     async fn async_force_generate_data<T: Task + Sync + Send>(
         &self,
         task: &T,
@@ -648,7 +714,12 @@ where
             Err(error) => return Err(SecretaryError::BuildRequestError(error.to_string()).into()),
         };
 
-        Ok(surfing::serde::from_mixed_text(&result)?)
+        match surfing::serde::from_mixed_text(&result) {
+            Ok(result) => Ok(result),
+            Err(error) => Err(Box::new(SecretaryError::JsonParsingError(
+                error.to_string(),
+            ))),
+        }
     }
 
     /// Asynchronously generates structured data by breaking down the task into individual field requests.
@@ -728,6 +799,11 @@ where
     /// - **API calls**: Makes one API call per field, which may increase costs but improve accuracy
     /// - **Memory efficient**: Uses async tasks instead of OS threads
     /// - **Early termination**: Stops all remaining requests if any field extraction fails
+    ///
+    /// # Errors
+    ///
+    /// Returns `SecretaryError` if the final assembly of fields into the struct `T` fails.
+    /// This is particularly useful for catching `FieldDeserializationError`.
     async fn async_fields_generate_data<T: Task + Sync + Send>(
         &self,
         task: &T,
@@ -764,6 +840,24 @@ where
 
         let distributed_tasks_results: Vec<(String, String)> = distributed_tasks_results?;
 
-        Ok(generate_from_tuples!(T, distributed_tasks_results))
+        // Use panic::catch_unwind to handle potential FieldDeserializationError panics from the macro
+        match panic::catch_unwind(|| generate_from_tuples!(T, distributed_tasks_results)) {
+            Ok(result) => Ok(result),
+            Err(panic_payload) => {
+                // Try to extract the FieldDeserializationError from the panic
+                if let Some(error_msg) = panic_payload.downcast_ref::<String>() {
+                    // Parse the error message to reconstruct the FieldDeserializationError
+                    if error_msg.contains("Failed to deserialize") {
+                        return Err(Box::new(SecretaryError::JsonParsingError(
+                            error_msg.clone(),
+                        )));
+                    }
+                }
+                // Fallback for other panics
+                Err(Box::new(SecretaryError::JsonParsingError(
+                    "Field deserialization failed with unknown error".to_string(),
+                )))
+            }
+        }
     }
 }

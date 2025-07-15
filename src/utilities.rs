@@ -52,7 +52,6 @@ pub fn extract_result_content(content: &str) -> String {
     content.trim().to_string()
 }
 
-
 /// Formats additional instructions into a structured prompt section.
 ///
 /// This utility function takes a vector of instruction strings and formats them
