@@ -764,7 +764,6 @@ where
 
         let distributed_tasks_results: Vec<(String, String)> = distributed_tasks_results?;
 
-        dbg!(&distributed_tasks_results);
         Ok(generate_from_tuples!(T, distributed_tasks_results))
     }
 }

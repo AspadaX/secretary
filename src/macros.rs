@@ -11,12 +11,26 @@ macro_rules! generate_from_tuples {
         use serde_json::{Map, Value};
 
         // Helper function to intelligently parse and clean values based on common patterns
-        fn smart_parse_value(content: &str) -> Value {
+        fn smart_parse_value(content: &str, field_name: &str) -> Value {
             let cleaned = content.trim();
             
             // Handle empty or null-like values
             if cleaned.is_empty() || cleaned.eq_ignore_ascii_case("null") || cleaned.eq_ignore_ascii_case("none") {
                 return Value::Null;
+            }
+            
+            // Try parsing as JSON first (for arrays, objects, quoted strings)
+            // This is more robust as it handles cases where LLM returns JSON strings
+            if let Ok(json_value) = serde_json::from_str::<Value>(cleaned) {
+                // If it's a JSON object with a single key that matches the field name,
+                // extract the inner value (common LLM response pattern)
+                if let Value::Object(obj) = &json_value {
+                    let field_key = field_name.split('.').last().unwrap_or(field_name);
+                    if obj.len() == 1 && obj.contains_key(field_key) {
+                        return obj[field_key].clone();
+                    }
+                }
+                return json_value;
             }
             
             // Handle boolean values (case-insensitive)
@@ -37,11 +51,6 @@ macro_rules! generate_from_tuples {
                     // Use floating point for decimals
                     return Value::Number(serde_json::Number::from_f64(numeric_value).unwrap_or_else(|| serde_json::Number::from(0)));
                 }
-            }
-            
-            // Try parsing as JSON first (for arrays, objects, quoted strings)
-            if let Ok(json_value) = serde_json::from_str::<Value>(cleaned) {
-                return json_value;
             }
             
             // Default to string value
@@ -89,18 +98,20 @@ macro_rules! generate_from_tuples {
             if parts.len() == 1 {
                 // Simple field, set directly
                 json_map.insert(parts[0].to_string(), value);
-            } else {
-                // Nested field, create nested structure
-                let first_part = parts[0];
-                let remaining_path = parts[1..].join(".");
-                
-                // Get or create the nested object
-                let nested_obj = json_map.entry(first_part.to_string())
-                    .or_insert_with(|| Value::Object(Map::new()));
-                
-                if let Value::Object(nested_map) = nested_obj {
-                    set_nested_field(nested_map, &remaining_path, value);
-                }
+
+                return;
+            }
+            
+            // Nested field, create nested structure
+            let first_part = parts[0];
+            let remaining_path = parts[1..].join(".");
+            
+            // Get or create the nested object
+            let nested_obj = json_map.entry(first_part.to_string())
+                .or_insert_with(|| Value::Object(Map::new()));
+            
+            if let Value::Object(nested_map) = nested_obj {
+                set_nested_field(nested_map, &remaining_path, value);
             }
         }
 
@@ -109,7 +120,7 @@ macro_rules! generate_from_tuples {
 
         for (field_name, content) in $tuples {
             // Use smart parsing to handle various data types and formats
-            let value = smart_parse_value(&content);
+            let value = smart_parse_value(&content, &field_name);
 
             // Handle nested field paths
             set_nested_field(&mut json_map, &field_name, value);
