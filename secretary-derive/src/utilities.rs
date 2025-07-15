@@ -5,17 +5,52 @@ pub fn convert_to_json_type(rust_type: &Type) -> String {
         Type::Array(_) => format!("JSON Array"),
         Type::Slice(_) => format!("JSON Array"),
         Type::Path(path) => {
-            let path_str = path.path.segments.iter()
-                .map(|s| s.ident.to_string())
-                .collect::<Vec<_>>()
-                .join("::");
-            match path_str.as_str() {
-                "i32" | "i64" | "isize" => format!("JSON Number"),
-                "u8" | "u16" | "u32" | "u64" | "usize" => format!("JSON Number"),
-                "f32" | "f64" => format!("JSON Number"),
-                "bool" => format!("JSON Boolean"),
-                "String" => format!("JSON String"),
-                _ => format!("JSON Object"), // Default to object for custom types
+            if let Some(last_segment) = path.path.segments.last() {
+                let type_name = last_segment.ident.to_string();
+                
+                match type_name.as_str() {
+                    // Primitive types
+                    "i32" | "i64" | "isize" => format!("JSON Number"),
+                    "u8" | "u16" | "u32" | "u64" | "usize" => format!("JSON Number"),
+                    "f32" | "f64" => format!("JSON Number"),
+                    "bool" => format!("JSON Boolean"),
+                    "String" => format!("JSON String"),
+                    
+                    // Generic types
+                    "Option" => {
+                        if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
+                            if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
+                                let inner_json_type = convert_to_json_type(inner_type);
+                                return format!("{} or JSON Null", inner_json_type);
+                            }
+                        }
+                        format!("JSON String or JSON Null")
+                    },
+                    "Vec" => {
+                        if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
+                            if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
+                                let inner_json_type = convert_to_json_type(inner_type);
+                                return format!("{}(s) in a JSON Array", inner_json_type);
+                            }
+                        }
+                        format!("JSON Array")
+                    },
+                    "HashMap" | "BTreeMap" => format!("JSON Object"),
+                    "HashSet" | "BTreeSet" => {
+                        if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
+                            if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
+                                let inner_json_type = convert_to_json_type(inner_type);
+                                return format!("JSON Array of {}", inner_json_type.to_lowercase());
+                            }
+                        }
+                        format!("JSON Array")
+                    },
+                    
+                    // Custom types (potential Task implementors)
+                    _ => format!("JSON Object"),
+                }
+            } else {
+                format!("JSON Object")
             }
         },
         Type::Reference(reference) => convert_to_json_type(&reference.elem),
