@@ -16,7 +16,7 @@ pub use secretary_derive::Task;
 use crate::{
     SecretaryError, generate_from_tuples,
     message::Message,
-    utilities::{cleanup_thinking_blocks, extract_result_content, format_additional_instructions},
+    utilities::llm::{cleanup_thinking_blocks, extract_result_content, format_additional_instructions},
 };
 
 /// Core trait for implementing LLM providers that are compatible with OpenAI-style APIs.
