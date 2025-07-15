@@ -14,9 +14,7 @@ use serde_json::Value;
 pub use secretary_derive::Task;
 
 use crate::{
-    SecretaryError, generate_from_tuples,
-    message::Message,
-    utilities::{cleanup_thinking_blocks, format_additional_instructions},
+    generate_from_tuples, message::Message, utilities::{cleanup_thinking_blocks, extract_result_content, format_additional_instructions}, SecretaryError
 };
 
 /// Core trait for implementing LLM providers that are compatible with OpenAI-style APIs.
@@ -468,7 +466,7 @@ where
                         .unwrap()
                         .to_string();
 
-                    (field_name, cleanup_thinking_blocks(content))
+                    (field_name, extract_result_content(&cleanup_thinking_blocks(content)))
                 });
 
                 distributed_tasks.push(handler);
@@ -752,7 +750,7 @@ where
 
                 Ok::<(String, String), Box<dyn std::error::Error + Send + Sync>>((
                     field_name,
-                    cleanup_thinking_blocks(content),
+                    extract_result_content(&cleanup_thinking_blocks(content)),
                 ))
             };
 

@@ -10,11 +10,12 @@ license = "MIT"
 
 [workspace]
 members = [".", "secretary-derive"]
+resolver = "2"
 
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-secretary-derive = { path = "secretary-derive", version = "0.4.20" }
+secretary-derive = { path = "secretary-derive", version = "0.4.30" }
 surfing = { version = "0.1.1", features = ["serde"] }
 async-trait = "0.1.88"
 futures = "0.3"

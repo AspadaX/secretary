@@ -40,6 +40,19 @@ pub fn cleanup_thinking_blocks(content: String) -> String {
     result
 }
 
+// Helper function to extract content from <result></result> tags
+pub fn extract_result_content(content: &str) -> String {
+    if let Some(start) = content.find("<result>") {
+        if let Some(end) = content.find("</result>") {
+            if start < end {
+                return content[start + 8..end].trim().to_string();
+            }
+        }
+    }
+    content.trim().to_string()
+}
+
+
 /// Formats additional instructions into a structured prompt section.
 ///
 /// This utility function takes a vector of instruction strings and formats them

@@ -1,6 +1,15 @@
+mod utilities;
+mod implementations;
+mod errors;
+mod field;
+
+use errors::ValidationError;
+use field::{classify_field_type, validate_field_requirements, FieldCategory};
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, parse_macro_input};
+
+use implementations::{implement_build_instruction_json, implement_default, implement_field_processing_code, implement_task};
 
 /// Derive macro that implements the Task trait for a struct,
 /// allowing users to directly use their data structures with LLM generation.
@@ -30,6 +39,7 @@ use syn::{Data, DeriveInput, Fields, parse_macro_input};
 pub fn derive_task(input: TokenStream) -> TokenStream {
     let input: DeriveInput = parse_macro_input!(input as DeriveInput);
     let name: &syn::Ident = &input.ident;
+    let mut expanded: proc_macro2::TokenStream = proc_macro2::TokenStream::new();
 
     // Extract field information for generating instructions
     let fields: &syn::punctuated::Punctuated<syn::Field, syn::token::Comma> = match &input.data {
@@ -39,194 +49,56 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
         },
         _ => panic!("Task can only be derived for structs"),
     };
-
-    let field_defaults: Vec<_> = fields
-        .iter()
-        .map(|field| {
-            let field_name: &syn::Ident = field.ident.as_ref().unwrap();
-            quote! {
-                #field_name: Default::default()
-            }
-        })
+    
+    // Validate
+    if let Err(validation_error) = validate_field_requirements(fields) {
+        match validation_error {
+            ValidationError::PrimitiveMissingInstruction(field_name) => {
+                panic!(
+                    "Field '{}' is a primitive type and must have a #[task(instruction = \"...\")] attribute",
+                    field_name
+                );
+            },
+            ValidationError::TaskFieldWithInstruction(field_name) => {
+                panic!(
+                    "Field '{}' appears to be a Task struct and should NOT have an instruction attribute. \
+                        Task structs define their own instructions internally.",
+                    field_name
+                );
+            },
+            ValidationError::UnknownFieldType(field_name) => {
+                panic!(
+                    "Field '{}' has an unknown type. Only primitive types with instructions \
+                        or custom structs implementing Task are allowed.",
+                    field_name
+                );
+            },
+        }
+    }
+    
+    // Add `where` clause to fields with Task impl
+    let task_field_types: Vec<_> = fields.iter()
+        .filter(|field| classify_field_type(&field.ty) == FieldCategory::PotentialTask)
+        .map(|field| &field.ty)
         .collect();
+    let trait_bounds: proc_macro2::TokenStream = if !task_field_types.is_empty() {
+        quote! {
+            where 
+                #(#task_field_types: ::secretary::traits::Task,)*
+        }
+    } else {
+        quote! {}
+    };
 
-    // Generate field instructions and expansion logic for nested structs
-    let field_expansions: Vec<_> = fields
-        .iter()
-        .map(|field| {
-            let field_name: &syn::Ident = field.ident.as_ref().unwrap();
-            let field_name_str: String = field_name.to_string();
-            let field_type = &field.ty;
-            let type_str = quote!(#field_type).to_string();
-
-            // Look for #[task(instruction = "...")] attribute
-            let instruction: String = field
-                .attrs
-                .iter()
-                .find_map(|attr| {
-                    if attr.path().is_ident("task") {
-                        attr.parse_args::<syn::LitStr>()
-                            .ok()
-                            .map(|lit| lit.value())
-                            .or_else(|| {
-                                // Try parsing as instruction = "value"
-                                attr.parse_args::<syn::Meta>().ok().and_then(|meta| {
-                                    if let syn::Meta::NameValue(nv) = meta {
-                                        if nv.path.is_ident("instruction") {
-                                            if let syn::Expr::Lit(syn::ExprLit {
-                                                lit: syn::Lit::Str(lit_str),
-                                                ..
-                                            }) = &nv.value
-                                            {
-                                                return Some(lit_str.value());
-                                            }
-                                        }
-                                    }
-                                    None
-                                })
-                            })
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_else(|| format!("Extract the {} field from the input", field_name_str));
-
-            let combined_instruction = format!("{}: {}", instruction, type_str);
-
-            quote! {
-                {
-                    // Try to expand nested Task structs
-                    let field_value = &self.#field_name;
-                    // Check if the field implements Task trait
-                    if let Ok(nested_json) = serde_json::to_value(field_value) {
-                        match &nested_json {
-                            serde_json::Value::Object(obj) => {
-                                if !obj.is_empty() {
-                                    // For nested objects, try to expand them if they're Task structs
-                                    // For now, we'll serialize the nested object and use it as the structure
-                                    instruction_map.insert(#field_name_str.to_string(), nested_json);
-                                } else {
-                                    // Empty object, use instruction string
-                                    instruction_map.insert(#field_name_str.to_string(), serde_json::Value::String(#combined_instruction.to_string()));
-                                }
-                            },
-                            _ => {
-                                // Not an object, use instruction string
-                                instruction_map.insert(#field_name_str.to_string(), serde_json::Value::String(#combined_instruction.to_string()));
-                            }
-                        }
-                    } else {
-                        // Serialization failed, use instruction string
-                        instruction_map.insert(#field_name_str.to_string(), serde_json::Value::String(#combined_instruction.to_string()));
-                    }
-                }
-            }
-        })
-        .collect();
+    // Generate field instructions and expansion logic for normal json generation
+    let field_expansions: Vec<proc_macro2::TokenStream> = implement_build_instruction_json(fields);
 
     // Generate field processing code for distributed generation
-    let distributed_field_processing: Vec<_> = fields
-        .iter()
-        .map(|field| {
-            let field_name: &syn::Ident = field.ident.as_ref().unwrap();
-            let field_name_str: String = field_name.to_string();
-            let field_type = &field.ty;
+    let distributed_field_processing: Vec<proc_macro2::TokenStream> = implement_field_processing_code(fields);
 
-            // Look for #[task(instruction = "...")] attribute
-            let instruction: String = field
-                .attrs
-                .iter()
-                .find_map(|attr| {
-                    if attr.path().is_ident("task") {
-                        attr.parse_args::<syn::LitStr>()
-                            .ok()
-                            .map(|lit| lit.value())
-                            .or_else(|| {
-                                // Try parsing as instruction = "value"
-                                attr.parse_args::<syn::Meta>().ok().and_then(|meta| {
-                                    if let syn::Meta::NameValue(nv) = meta {
-                                        if nv.path.is_ident("instruction") {
-                                            if let syn::Expr::Lit(syn::ExprLit {
-                                                lit: syn::Lit::Str(lit_str),
-                                                ..
-                                            }) = &nv.value
-                                            {
-                                                return Some(lit_str.value());
-                                            }
-                                        }
-                                    }
-                                    None
-                                })
-                            })
-                    } else {
-                        None
-                    }
-                })
-                .unwrap_or_else(|| format!("Extract the {} field from the input", field_name_str));
-
-            quote! {
-                {
-                    let field_name = #field_name_str;
-                    let field_path = if prefix.is_empty() {
-                        field_name.to_string()
-                    } else {
-                        format!("{}.{}", prefix, field_name)
-                    };
-
-                    let field_value = &self.#field_name;
-                    let field_type = stringify!(#field_type);
-                    let instruction = #instruction;
-                    let combined_instruction = format!("{}: {}", instruction, field_type);
-                    
-                    // Try to check if this field implements Task trait by attempting to call collect_distributed_prompts
-                    // This is a compile-time check - if the field implements Task, this will compile
-                    if let Ok(_) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        // Try to serialize to see if it's a complex object
-                        serde_json::to_value(field_value)
-                    })) {
-                        if let Ok(nested_json) = serde_json::to_value(field_value) {
-                            match nested_json {
-                                serde_json::Value::Object(obj) if !obj.is_empty() => {
-                                    // This might be a nested Task struct, try to get its distributed prompts
-                                    // For now, we'll check if we can call the method on it
-                                    
-                                    // If it's a complex object, treat each sub-field as a separate prompt
-                                    for (sub_field, _) in obj {
-                                        let sub_field_path = format!("{}.{}", field_path, sub_field);
-                                        let mut prompt = String::new();
-                                        prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
-                                        prompt.push_str(&format!("- Extract the {} field from the nested {} object\n", sub_field, field_name));
-                                        prompts.push((sub_field_path, prompt));
-                                    }
-                                },
-                                _ => {
-                                    // Simple field, add its instruction
-                                    let mut prompt = String::new();
-                                    prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
-                                    prompt.push_str(&format!("- {}: {}\n", field_path, combined_instruction));
-                                    prompts.push((field_path, prompt));
-                                }
-                            }
-                        } else {
-                            // Serialization failed, treat as simple field
-                            let mut prompt = String::new();
-                            prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
-                            prompt.push_str(&format!("- {}: {}\n", field_path, combined_instruction));
-                            prompts.push((field_path, prompt));
-                        }
-                    } else {
-                        // Panic occurred, treat as simple field
-                        let mut prompt = String::new();
-                        prompt.push_str("Output a value according to criteria and wrap them in <result></result>.\n");
-                        prompt.push_str(&format!("- {}: {}\n", field_path, combined_instruction));
-                        prompts.push((field_path, prompt));
-                    }
-                }
-            }
-        })
-        .collect();
-
-    let expanded: proc_macro2::TokenStream = quote! {
+    expanded.extend(implement_default(&name, &fields));
+    expanded.extend(implement_task(&name, &trait_bounds, &distributed_field_processing));
+    expanded.extend(quote! {
         impl #name {
             /// Create a new instance with additional instructions
             pub fn new() -> Self {
@@ -245,39 +117,7 @@ pub fn derive_task(input: TokenStream) -> TokenStream {
                 Value::Object(instruction_map)
             }
         }
-
-        impl ::secretary::traits::Task for #name {
-            fn get_system_prompt(&self) -> String {
-                use serde_json::{Value, Map};
-
-                // Build the instruction JSON structure directly
-                let instruction_json = self.build_instruction_json();
-
-                let mut prompt = String::new();
-                prompt.push_str("This is the json structure that you should strictly follow:\n");
-                prompt.push_str(&serde_json::to_string_pretty(&instruction_json).unwrap_or_else(|_| "{}".to_string()));
-
-                prompt
-            }
-
-            fn get_system_prompts_for_distributed_generation(&self) -> Vec<(String, String)> {
-                let mut prompts: Vec<(String, String)> = Vec::new();
-                let prefix = String::new();
-
-                #(#distributed_field_processing)*
-
-                prompts
-            }
-        }
-
-        impl Default for #name {
-            fn default() -> Self {
-                Self {
-                    #(#field_defaults),*
-                }
-            }
-        }
-    };
+    });
 
     TokenStream::from(expanded)
 }
