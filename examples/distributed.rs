@@ -21,7 +21,7 @@ struct PersonExtraction {
     #[task(instruction = "Extract the person's age as a number")]
     pub age: u32,
 
-    pub info: Info
+    pub info: Info,
 }
 
 /// Example showing how to use the derive macro
