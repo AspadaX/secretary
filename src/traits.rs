@@ -840,7 +840,6 @@ where
 
         let distributed_tasks_results: Vec<(String, String)> = distributed_tasks_results?;
 
-        dbg!(&distributed_tasks_results);
         // Use panic::catch_unwind to handle potential FieldDeserializationError panics from the macro
         match panic::catch_unwind(|| generate_from_tuples!(T, distributed_tasks_results)) {
             Ok(result) => Ok(result),
