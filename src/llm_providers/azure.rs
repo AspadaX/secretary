@@ -1,10 +1,6 @@
 use serde_json::{Value, json};
 
 use crate::{
-    constants::{
-        AZURE_OPENAI_API_VERSION_MARKER, AZURE_OPENAI_COMPLETION_ROUTE,
-        AZURE_OPENAI_DEPLOYMENT_ID_MARKER,
-    },
     message::Message,
     traits::{AsyncGenerateData, GenerateData, IsLLM},
 };
