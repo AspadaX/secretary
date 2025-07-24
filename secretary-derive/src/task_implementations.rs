@@ -1,7 +1,7 @@
 use quote::quote;
 use syn::Ident;
 
-use crate::{data_structure::DataStructureField, field_types::TaskFieldType};
+use crate::{data_structure_field::DataStructureField, field_types::TaskFieldType};
 
 pub fn implement_task_trait(
     name: &Ident,

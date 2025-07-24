@@ -1,4 +1,4 @@
-mod data_structure;
+mod data_structure_field;
 mod utilities;
 mod field_attributes;
 mod task_implementations;
@@ -9,7 +9,7 @@ use default_implementations::implement_default;
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, DeriveInput};
 
-use data_structure::{get_data_structure_fields, DataStructureField};
+use data_structure_field::{get_data_structure_fields, DataStructureField};
 use task_implementations::{implement_task_trait, implement_new_method};
 
 #[proc_macro_derive(Task, attributes(task))]
