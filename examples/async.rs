@@ -15,6 +15,12 @@ struct Details {
     pub brand: Option<String>,
 }
 
+#[derive(Task, Serialize, Deserialize, Debug)]
+pub struct Feature {
+    #[task(instruction = "description of the feature")]
+    pub description: String,
+}
+
 /// Example data structure for extracting product information
 #[derive(Task, Serialize, Deserialize, Debug)]
 struct ProductExtraction {
@@ -23,7 +29,7 @@ struct ProductExtraction {
     pub name: String,
 
     #[task(instruction = "Extract key features or description")]
-    pub description: String,
+    pub description: Vec<Feature>,
 
     #[task(instruction = "Determine if the product is in stock (true/false)")]
     pub in_stock: bool,
