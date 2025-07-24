@@ -1,5 +1,23 @@
 use syn::{Field, Type};
 
+use crate::field_attributes::task::TaskFieldAttributes;
+
+pub fn get_instruction(field: &Field) -> Option<String> {
+    for attr in field.attrs.iter() {
+        if attr.path().is_ident("task") {
+            if let Ok(result) = attr.parse_args::<TaskFieldAttributes>() {
+                return result.instruction;
+            }
+        }
+    }
+    
+    None
+}
+
+pub fn get_field_prompt(name: String, instruction: String, json_data_type: String) -> String {
+    format!("{}: {}, {}\n", name, instruction, json_data_type)
+}
+
 pub fn convert_to_json_type(rust_type: &Type) -> String {
     match rust_type {
         Type::Array(_) => format!("JSON Array"),
@@ -62,38 +80,4 @@ pub fn convert_to_json_type(rust_type: &Type) -> String {
         }
         _ => format!("JSON Null"), // Default case for unknown types
     }
-}
-
-/// Get the field instruction annotated with #[task(instruction = "...")] attribute
-/// in each field of a struct
-pub fn get_field_instruction(field: &Field) -> Option<String> {
-    let mut field_instruction: Option<String> = None;
-
-    for field_attr in field.attrs.iter() {
-        if field_attr.path().is_ident("task") {
-            field_instruction = field_attr
-                .parse_args::<syn::LitStr>()
-                .ok()
-                .map(|lit| lit.value())
-                .or_else(|| {
-                    // Try parsing as instruction = "value"
-                    field_attr.parse_args::<syn::Meta>().ok().and_then(|meta| {
-                        if let syn::Meta::NameValue(nv) = meta {
-                            if nv.path.is_ident("instruction") {
-                                if let syn::Expr::Lit(syn::ExprLit {
-                                    lit: syn::Lit::Str(lit_str),
-                                    ..
-                                }) = &nv.value
-                                {
-                                    return Some(lit_str.value());
-                                }
-                            }
-                        }
-                        None
-                    })
-                });
-        }
-    }
-
-    field_instruction
 }
