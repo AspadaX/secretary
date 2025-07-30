@@ -29,10 +29,8 @@ impl AzureOpenAILLM {
     /// * `Result<Self, Error>` - On success, returns an instance of the AzureOpenAILLM struct. On failure, returns an Box<dyn std::error::Error>.
     pub fn new(api_base: &str, api_key: &str, deployment_id: &str, api_version: &str) -> Self {
         let base_url: String = format!(
-            "{}/openai/deployments/{}/chat/completions?api-version={}", 
-            api_base,
-            deployment_id,
-            api_version
+            "{}/openai/deployments/{}/chat/completions?api-version={}",
+            api_base, deployment_id, api_version
         );
 
         Self {

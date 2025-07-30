@@ -30,7 +30,7 @@ macro_rules! generate_from_tuples {
                         return obj[field_key].clone();
                     }
                 }
-                
+
                 return json_value;
             }
 

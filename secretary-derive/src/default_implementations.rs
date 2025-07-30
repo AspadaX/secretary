@@ -2,12 +2,9 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{Data, Fields, Ident, Type};
 
-use crate::field_types::{detect_task_field_type, TaskFieldType};
+use crate::field_types::{TaskFieldType, detect_task_field_type};
 
-pub fn implement_default(
-    name: &Ident,
-    data: &Data
-) -> TokenStream {
+pub fn implement_default(name: &Ident, data: &Data) -> TokenStream {
     match data {
         Data::Struct(data_struct) => {
             let fields = match &data_struct.fields {
@@ -61,7 +58,7 @@ pub fn implement_default(
 
 fn generate_default_value(field_type: &Type) -> TokenStream {
     let task_field_type = detect_task_field_type(field_type);
-    
+
     match task_field_type {
         TaskFieldType::VecTask => {
             // Generate a Vec with example data
@@ -100,8 +97,11 @@ fn generate_default_value(field_type: &Type) -> TokenStream {
             if let Type::Path(path) = field_type {
                 if let Some(last_segment) = path.path.segments.last() {
                     if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
-                        if let (Some(syn::GenericArgument::Type(key_type)), Some(syn::GenericArgument::Type(value_type))) = 
-                            (args.args.first(), args.args.iter().nth(1)) {
+                        if let (
+                            Some(syn::GenericArgument::Type(key_type)),
+                            Some(syn::GenericArgument::Type(value_type)),
+                        ) = (args.args.first(), args.args.iter().nth(1))
+                        {
                             let key_default = generate_primitive_default(key_type);
                             let value_default = generate_default_value(value_type);
                             return quote! {
@@ -123,8 +123,11 @@ fn generate_default_value(field_type: &Type) -> TokenStream {
             if let Type::Path(path) = field_type {
                 if let Some(last_segment) = path.path.segments.last() {
                     if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
-                        if let (Some(syn::GenericArgument::Type(key_type)), Some(syn::GenericArgument::Type(value_type))) = 
-                            (args.args.first(), args.args.iter().nth(1)) {
+                        if let (
+                            Some(syn::GenericArgument::Type(key_type)),
+                            Some(syn::GenericArgument::Type(value_type)),
+                        ) = (args.args.first(), args.args.iter().nth(1))
+                        {
                             let key_default = generate_primitive_default(key_type);
                             let value_default = generate_default_value(value_type);
                             return quote! {

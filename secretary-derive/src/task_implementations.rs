@@ -7,20 +7,22 @@ pub fn implement_task_trait(
     name: &Ident,
     data_structure_fields: Vec<DataStructureField>,
 ) -> proc_macro2::TokenStream {
-    let field_implementations: Vec<proc_macro2::TokenStream> = implement_get_system_prompt(&data_structure_fields);
-    let distributed_field_processing: Vec<proc_macro2::TokenStream> = implement_field_processing_code(&data_structure_fields);
+    let field_implementations: Vec<proc_macro2::TokenStream> =
+        implement_get_system_prompt(&data_structure_fields);
+    let distributed_field_processing: Vec<proc_macro2::TokenStream> =
+        implement_field_processing_code(&data_structure_fields);
 
     quote! {
         impl Task for #name {
             fn get_system_prompt(&self) -> String {
                 let mut prompt = String::new();
                 #(#field_implementations)*
-                
+
                 prompt.push_str(&serde_json::to_string_pretty(&self).unwrap());
-                
+
                 prompt
             }
-        
+
             fn get_system_prompts_for_distributed_generation(&self) -> Vec<(String, String)> {
                 let mut prompts: Vec<(String, String)> = Vec::new();
                 let prefix = String::new();
@@ -43,7 +45,9 @@ pub fn implement_new_method(name: &Ident) -> proc_macro2::TokenStream {
     }
 }
 
-fn implement_get_system_prompt(data_structure_fields: &Vec<DataStructureField>) -> Vec<proc_macro2::TokenStream> {
+fn implement_get_system_prompt(
+    data_structure_fields: &Vec<DataStructureField>,
+) -> Vec<proc_macro2::TokenStream> {
     data_structure_fields
         .iter()
         .map(|field| {
@@ -181,7 +185,6 @@ pub fn implement_field_processing_code(
                             for (index, item) in self.#field_name_ident.iter().enumerate() {
                                 let item_path = format!("{}[{}]", field_path, index);
                                 let nested_prompts = item.get_system_prompts_for_distributed_generation();
-                                
                                 for (nested_path, nested_prompt) in nested_prompts {
                                     let full_path = if nested_path.is_empty() {
                                         item_path.clone()
@@ -205,8 +208,7 @@ pub fn implement_field_processing_code(
                             };
                             
                             if let Some(ref item) = self.#field_name_ident {
-                                let nested_prompts = item.get_system_prompts_for_distributed_generation();
-                                
+                                let nested_prompts = item.get_system_prompts_for_distributed_generation();   
                                 for (nested_path, nested_prompt) in nested_prompts {
                                     let full_path = if nested_path.is_empty() {
                                         field_path.clone()
@@ -228,11 +230,9 @@ pub fn implement_field_processing_code(
                             } else {
                                 format!("{}.{}", prefix, #field_name_str)
                             };
-                            
                             for (key, value) in &self.#field_name_ident {
                                 let item_path = format!("{}[{}]", field_path, key);
                                 let nested_prompts = value.get_system_prompts_for_distributed_generation();
-                                
                                 for (nested_path, nested_prompt) in nested_prompts {
                                     let full_path = if nested_path.is_empty() {
                                         item_path.clone()
