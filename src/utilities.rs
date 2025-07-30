@@ -1,3 +1,7 @@
+use serde_json::Value;
+
+use crate::SecretaryError;
+
 /// Removes thinking blocks from LLM responses, particularly useful for reasoning models.
 ///
 /// Many reasoning models (like o1-preview, deepseek-reasoner, etc.) wrap their internal
@@ -77,4 +81,29 @@ pub fn format_additional_instructions(additional_instructions: &Vec<String>) -> 
     }
 
     prompt
+}
+
+/// Extract texts from the API response from LLM
+///
+/// This function parses a JSON API response from an LLM and extracts the text content
+/// from the first choice's message. It returns the extracted content as a string or
+/// an error if the content is not found.
+///
+/// # Arguments
+///
+/// * `api_response` - A string slice containing the raw JSON response from the LLLM API
+///
+/// # Returns
+///
+/// A Result containing:
+///   - Ok(String): The extracted text content
+///   - Err: An error if the content cannot be extracted (e.g., invalid JSON or missing field)
+pub fn extract_text_content_from_llm_response(
+    api_response: &str,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync + 'static>> {
+    let value: Value = serde_json::from_str(&api_response)?;
+    match value["choices"][0]["message"]["content"].as_str() {
+        Some(result) => Ok(result.to_string()),
+        None => return Err(SecretaryError::NoLLMResponse.into()),
+    }
 }

@@ -9,12 +9,12 @@ pub enum FieldCategory {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TaskFieldType {
-    Normal,                    // Regular field, no Task
-    DirectTask,               // field: SomeTaskType  
-    VecTask,                  // field: Vec<SomeTaskType>
-    OptionTask,               // field: Option<SomeTaskType>
-    HashMapTask,              // field: HashMap<K, SomeTaskType>
-    BTreeMapTask,             // field: BTreeMap<K, SomeTaskType>
+    Normal,       // Regular field, no Task
+    DirectTask,   // field: SomeTaskType
+    VecTask,      // field: Vec<SomeTaskType>
+    OptionTask,   // field: Option<SomeTaskType>
+    HashMapTask,  // field: HashMap<K, SomeTaskType>
+    BTreeMapTask, // field: BTreeMap<K, SomeTaskType>
 }
 
 /// Classifies a field type into one of the categories.
@@ -54,11 +54,12 @@ pub fn detect_task_field_type(ty: &Type) -> TaskFieldType {
         Type::Path(path) => {
             if let Some(last_segment) = path.path.segments.last() {
                 let type_name = last_segment.ident.to_string();
-                
+
                 match type_name.as_str() {
                     "Vec" => {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
-                            if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
+                            if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
+                            {
                                 if classify_field_type(inner_type) == FieldCategory::PotentialTask {
                                     return TaskFieldType::VecTask;
                                 }
@@ -68,7 +69,8 @@ pub fn detect_task_field_type(ty: &Type) -> TaskFieldType {
                     }
                     "Option" => {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
-                            if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first() {
+                            if let Some(syn::GenericArgument::Type(inner_type)) = args.args.first()
+                            {
                                 if classify_field_type(inner_type) == FieldCategory::PotentialTask {
                                     return TaskFieldType::OptionTask;
                                 }
@@ -79,7 +81,9 @@ pub fn detect_task_field_type(ty: &Type) -> TaskFieldType {
                     "HashMap" => {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             // For HashMap<K, V>, we check the second argument (value type)
-                            if let Some(syn::GenericArgument::Type(value_type)) = args.args.iter().nth(1) {
+                            if let Some(syn::GenericArgument::Type(value_type)) =
+                                args.args.iter().nth(1)
+                            {
                                 if classify_field_type(value_type) == FieldCategory::PotentialTask {
                                     return TaskFieldType::HashMapTask;
                                 }
@@ -90,7 +94,9 @@ pub fn detect_task_field_type(ty: &Type) -> TaskFieldType {
                     "BTreeMap" => {
                         if let syn::PathArguments::AngleBracketed(args) = &last_segment.arguments {
                             // For BTreeMap<K, V>, we check the second argument (value type)
-                            if let Some(syn::GenericArgument::Type(value_type)) = args.args.iter().nth(1) {
+                            if let Some(syn::GenericArgument::Type(value_type)) =
+                                args.args.iter().nth(1)
+                            {
                                 if classify_field_type(value_type) == FieldCategory::PotentialTask {
                                     return TaskFieldType::BTreeMapTask;
                                 }
@@ -99,7 +105,9 @@ pub fn detect_task_field_type(ty: &Type) -> TaskFieldType {
                         TaskFieldType::Normal
                     }
                     // Custom types (potential direct Task implementors)
-                    _ if !type_name.starts_with("std::") && classify_field_type(ty) == FieldCategory::PotentialTask => {
+                    _ if !type_name.starts_with("std::")
+                        && classify_field_type(ty) == FieldCategory::PotentialTask =>
+                    {
                         TaskFieldType::DirectTask
                     }
                     _ => TaskFieldType::Normal,

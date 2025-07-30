@@ -16,7 +16,10 @@ pub use secretary_derive::Task;
 use crate::{
     SecretaryError, generate_from_tuples,
     message::Message,
-    utilities::{cleanup_thinking_blocks, extract_result_content, format_additional_instructions},
+    utilities::{
+        cleanup_thinking_blocks, extract_result_content, extract_text_content_from_llm_response,
+        format_additional_instructions,
+    },
 };
 
 /// Core trait for implementing LLM providers that are compatible with OpenAI-style APIs.
@@ -323,11 +326,7 @@ where
         let request: String =
             self.send_message(task.make_prompt(target, additional_instructions), true)?;
 
-        let value: Value = serde_json::from_str(&request).unwrap();
-        let result = value["choices"][0]["message"]["content"]
-            .as_str()
-            .unwrap()
-            .to_string();
+        let result: String = extract_text_content_from_llm_response(&request)?;
 
         match serde_json::from_str::<T>(&result) {
             Ok(result) => Ok(result),
@@ -395,11 +394,7 @@ where
         let response: String =
             self.send_message(task.make_prompt(target, additional_instructions), false)?;
 
-        let value: Value = serde_json::from_str(&response).unwrap();
-        let result: String = value["choices"][0]["message"]["content"]
-            .as_str()
-            .unwrap()
-            .to_string();
+        let result: String = extract_text_content_from_llm_response(&response)?;
 
         match surfing::serde::from_mixed_text(&result) {
             Ok(result) => Ok(result),
@@ -500,17 +495,14 @@ where
             let mut distributed_tasks = Vec::new();
             for (field_name, message) in messages {
                 let handler = s.spawn(move || {
-                    let raw_result: String = self.send_message(message, false).unwrap();
-                    let value: Value = serde_json::from_str(&raw_result).unwrap();
-                    let content: String = value["choices"][0]["message"]["content"]
-                        .as_str()
-                        .unwrap()
-                        .to_string();
+                    let content: String = extract_text_content_from_llm_response(
+                        &self.send_message(message, false)?,
+                    )?;
 
-                    (
+                    Ok::<(String, String), Box<dyn std::error::Error + Send + Sync + 'static>>((
                         field_name,
                         extract_result_content(&cleanup_thinking_blocks(content)),
-                    )
+                    ))
                 });
 
                 distributed_tasks.push(handler);
@@ -519,13 +511,16 @@ where
             let mut distributed_tasks_results: Vec<(String, String)> = Vec::new();
             for distributed_task in distributed_tasks {
                 match distributed_task.join() {
-                    Ok(result) => distributed_tasks_results.push(result),
-                    Err(_) => panic!(),
+                    Ok(result) => match result {
+                        Ok(result) => distributed_tasks_results.push(result),
+                        Err(error) => return Err(error),
+                    },
+                    Err(error) => panic!(),
                 }
             }
 
-            distributed_tasks_results
-        });
+            Ok(distributed_tasks_results)
+        })?;
 
         // Use panic::catch_unwind to handle potential FieldDeserializationError panics from the macro
         match panic::catch_unwind(|| generate_from_tuples!(T, distributed_tasks_results)) {
@@ -624,13 +619,7 @@ where
             .await;
 
         let result = match request {
-            Ok(result) => {
-                let value: Value = serde_json::from_str(&result).unwrap();
-                value["choices"][0]["message"]["content"]
-                    .as_str()
-                    .unwrap()
-                    .to_string()
-            }
+            Ok(result) => extract_text_content_from_llm_response(&result)?,
             Err(error) => return Err(SecretaryError::BuildRequestError(error.to_string()).into()),
         };
 
@@ -704,13 +693,7 @@ where
             .await;
 
         let result: String = match request {
-            Ok(result) => {
-                let value: Value = serde_json::from_str(&result).unwrap();
-                value["choices"][0]["message"]["content"]
-                    .as_str()
-                    .unwrap()
-                    .to_string()
-            }
+            Ok(result) => extract_text_content_from_llm_response(&result)?,
             Err(error) => return Err(SecretaryError::BuildRequestError(error.to_string()).into()),
         };
 
@@ -817,12 +800,9 @@ where
 
         for (field_name, message) in messages {
             let task_future = async move {
-                let raw_result: String = self.async_send_message(message, false).await?;
-                let value: Value = serde_json::from_str(&raw_result).unwrap();
-                let content: String = value["choices"][0]["message"]["content"]
-                    .as_str()
-                    .unwrap()
-                    .to_string();
+                let content: String = extract_text_content_from_llm_response(
+                    &self.async_send_message(message, false).await?,
+                )?;
 
                 Ok::<(String, String), Box<dyn std::error::Error + Send + Sync>>((
                     field_name,

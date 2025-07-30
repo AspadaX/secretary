@@ -10,7 +10,7 @@ pub fn get_instruction(field: &Field) -> Option<String> {
             }
         }
     }
-    
+
     None
 }
 
